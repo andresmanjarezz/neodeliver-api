@@ -1,0 +1,22 @@
+service: neodeliver-api
+ 
+provider:
+  name: aws
+  runtime: go1.x
+ 
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+plugins:
+  - serverless-offline
+
+functions:
+  hello:
+    handler: bin/hello
+    events:
+      - http:
+          path: hello
+          method: post
