@@ -34,4 +34,8 @@ func Init(s *graphql.Builder) {
 			"organization_id": r.OrganizationID,
 		}
 	})
+	
+	s.AddMutationMethods(Mutation{})
 }
+
+type Mutation struct{}

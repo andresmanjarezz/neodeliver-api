@@ -18,7 +18,6 @@ var client *mongo.Client
 func Client() *mongo.Database {
 	if client == nil {
 		uri := os.Getenv("mongodb")
-		// fmt.Println(string(uri))
 
 		serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 		opts := options.Client().ApplyURI(uri).SetServerAPIOptions(serverAPI)
@@ -53,11 +52,11 @@ func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*optio
 	return c.Collection(CollectionName(o)).FindOne(ctx, filter, opts...).Decode(o)
 }
 
-// func Save(ctx context.Context, o interface{}) error {
-// 	c := Client().Collection(CollectionName(o))
-// 	_, err := c.InsertOne(ctx, o)
-// 	return err
-// }
+func Save(ctx context.Context, o interface{}) error {
+	c := Client().Collection(CollectionName(o))
+	_, err := c.InsertOne(ctx, o)
+	return err
+}
 
 func Update(ctx context.Context, o interface{}, filter interface{}, update interface{}) error {
 	c := Client().Collection(CollectionName(o))
