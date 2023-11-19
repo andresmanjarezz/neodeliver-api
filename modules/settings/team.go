@@ -24,6 +24,7 @@ type TeamMember struct {
 	Email               string     `json:"email" bson:"email"`
 	ProfilePicture      string     `json:"profile_picture" bson:"profile_picture"`
 	InvitationExpiresAt *time.Time `json:"invitation_expires_at" bson:"invitation_expires_at"`
+	InvitationToken     string     `json:"-" graphql:"-" bson:"invitation_token,omitempty"`
 	CreatedAt           time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at" bson:"updated_at"`
 	DeletedAt           *time.Time `graphql:"-" bson:"deleted_at"`
@@ -56,6 +57,8 @@ func (Mutation) InviteUser(p graphql.ResolveParams, rbac rbac.RBAC, args InviteA
 		return u, nil
 	}
 
+	invitationToken := ksuid.New().String()
+
 	// add user to team if not yet found
 	if err != nil {
 		exp := time.Now().Add(time.Hour * 24 * 7)
@@ -64,6 +67,7 @@ func (Mutation) InviteUser(p graphql.ResolveParams, rbac rbac.RBAC, args InviteA
 			OrganizationID:      rbac.OrganizationID,
 			Email:               args.Email,
 			InvitationExpiresAt: &exp,
+			InvitationToken:     invitationToken,
 			Role:                args.Role,
 			CreatedAt:           time.Now(),
 			UpdatedAt:           time.Now(),
@@ -72,12 +76,13 @@ func (Mutation) InviteUser(p graphql.ResolveParams, rbac rbac.RBAC, args InviteA
 		if err = db.Save(p.Context, &u); err != nil {
 			return u, err
 		}
-	} else if u.Role != args.Role {
+	} else {
 		// update member role if new invited role is different and invitation is not yet accepted
 		err = db.Update(p.Context, &u, map[string]interface{}{
 			"_id": u.ID,
 		}, map[string]interface{}{
-			"role": args.Role,
+			"role":             args.Role,
+			"invitation_token": invitationToken,
 		})
 
 		if err != nil {
@@ -87,8 +92,9 @@ func (Mutation) InviteUser(p graphql.ResolveParams, rbac rbac.RBAC, args InviteA
 
 	// generate invitation token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, invitationClaims{
-		ID:  u.ID,
-		Exp: u.InvitationExpiresAt.Unix(),
+		ID:    u.ID,
+		Token: invitationToken,
+		Exp:   u.InvitationExpiresAt.Unix(),
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
@@ -144,10 +150,8 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 	if u.UserID != "" && u.UserID == rbac.UserID {
 		// user already accepted invitation, nothing to do
 		return u, nil
-	} else if u.UserID != "" {
-		return u, errors.New("invitation already accepted by another user")
-	} else if u.InvitationExpiresAt != nil && time.Now().After(*u.InvitationExpiresAt) {
-		return u, errors.New("invitation expired")
+	} else if u.UserID != "" || (u.InvitationExpiresAt != nil && time.Now().After(*u.InvitationExpiresAt)) || u.InvitationToken != claims.Token {
+		return u, errors.New("invitation not found or alraedy accepted")
 	}
 
 	// update team member
@@ -168,6 +172,7 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 		"email":                 user.Email,
 		"profile_picture":       user.ProfilePicture,
 		"invitation_expires_at": nil,
+		"invitation_token":      "",
 		"updated_at":            time.Now(),
 	})
 
@@ -178,8 +183,9 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 // invitation JWT helper functions
 
 type invitationClaims struct {
-	ID  string `json:"id"`
-	Exp int64  `json:"exp"`
+	ID    string `json:"id"`
+	Exp   int64  `json:"exp"`
+	Token string `json:"tk"`
 }
 
 func (i invitationClaims) Valid() error {
