@@ -36,7 +36,9 @@ func Init(s *graphql.Builder) {
 		}
 	})
 
+	s.AddQueryMethods(Query{})
 	s.AddMutationMethods(Mutation{})
 }
 
 type Mutation struct{}
+type Query struct{}
