@@ -91,14 +91,8 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	objectID, _ := primitive.ObjectIDFromHex(args.ID)
 	filter := bson.M{"_id": objectID}
 
-	d := Contact{}
-	_, err := db.Find(p.Context, &d, filter)
-	if err != nil {
-		return nil, err
-	}
-
 	// Save the updated contact to the database
-	err = db.Update(p.Context, &c, filter, &c)
+	err := db.Update(p.Context, &c, filter, &c)
 	if err != nil {
 		return nil, err
 	}
