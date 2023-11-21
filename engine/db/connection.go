@@ -7,10 +7,13 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"fmt"
 
 	"github.com/gertd/go-pluralize"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	// "go.mongodb.org/mongo-driver/bson/primitive"
+	// "go.mongodb.org/mongo-driver/bson"
 )
 
 var client *mongo.Client
@@ -47,15 +50,17 @@ func Close() {
 
 // ---
 
-func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*options.FindOneOptions) error {
+func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*options.FindOneOptions) (interface{}, error) {
 	c := Client()
-	return c.Collection(CollectionName(o)).FindOne(ctx, filter, opts...).Decode(o)
+	result := o
+	err := c.Collection(CollectionName(o)).FindOne(ctx, filter, opts...).Decode(&result)
+	return result, err
 }
 
-func Save(ctx context.Context, o interface{}) error {
+func Save(ctx context.Context, o interface{}, payload interface{}) (*mongo.InsertOneResult, error) {
 	c := Client().Collection(CollectionName(o))
-	_, err := c.InsertOne(ctx, o)
-	return err
+	insertResult, err := c.InsertOne(ctx, payload)	
+	return insertResult, err
 }
 
 func Update(ctx context.Context, o interface{}, filter interface{}, update interface{}) error {
@@ -75,6 +80,13 @@ func Update(ctx context.Context, o interface{}, filter interface{}, update inter
 	}
 
 	return res.Decode(o)
+}
+
+func Delete(ctx context.Context, o interface{}, filter interface{}) error {
+	c := Client().Collection(CollectionName(o))
+	_, err := c.DeleteOne(ctx, filter)
+	fmt.Println(filter)
+	return err
 }
 
 func CollectionName(o interface{}) string {
