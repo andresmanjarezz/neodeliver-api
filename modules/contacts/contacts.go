@@ -11,36 +11,36 @@ import (
 )
 
 type Contact struct {
-	OrganizationID     string `bson:"organization_id"`
-	GivenName          string `bson:"given_name"`
-	LastName           string `bson:"last_name"`
-	Email              string `bson:"email"`
-	NotificationTokens []string `bson:"notification_tokens"`
-	PhoneNumber        string `bson:"phone_number"`
-	Status             string `bson:"status"`
-	SubscribedAt       time.Time `bson:"subscribed_at"`
-	Lang               string `bson:"lang"`
+	OrganizationID     string `bson:"organization_id" json:"organization_id"`
+	GivenName          string `bson:"given_name" json:"given_name"`
+	LastName           string `bson:"last_name" json:"last_name"`
+	Email              string `bson:"email" json:"email"`
+	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
+	PhoneNumber        string `bson:"phone_number" json:"phone_number"`
+	Status             string `bson:"status" json:"status"`
+	SubscribedAt       time.Time `bson:"subscribed_at" json:"subscribed_at"`
+	Lang               string `bson:"lang" json:"lang"`
 }
 
 type AddContact struct {
-	OrganizationID     string `bson:"organization_id"`
-	GivenName          string `bson:"given_name"`
-	LastName           string `bson:"last_name"`
-	Email              string `bson:"email"`
-	PhoneNumber        string `bson:"phone_number"`
+	OrganizationID     string `bson:"organization_id" json:"organization_id"`
+	GivenName          string `bson:"given_name" json:"given_name"`
+	LastName           string `bson:"last_name" json:"last_name"`
+	Email              string `bson:"email" json:"email"`
+	PhoneNumber        string `bson:"phone_number" json:"phone_number"`
 }
 
 type EditContact struct {
-	ID 				string `json:"id"`
-	LastName        string `json:"last_name"`
-	Email           string `json:"email"`
-	PhoneNumber     string `json:"phone_number"`
-	OrganizationID  string `json:"organization_id"`
-	GivenName       string `json:"given_name"`
-	Status          string `bson:"status"`
-	SubscribedAt    time.Time `bson:"subscribed_at"`
-	Lang            string `bson:"lang"`
-	NotificationTokens []string `bson:"notification_tokens"`
+	ID 				string `bson:"id" json:"id"`
+	LastName        string `bson:"last_name" json:"last_name"`
+	Email           string `bson:"email" json:"email"`
+	PhoneNumber     string `bson:"phone_number" json:"phone_number"`
+	OrganizationID  string `bson:"organization_id" json:"organization_id"`
+	GivenName       string `bson:"given_name" json:"given_name"`
+	Status          string `bson:"status" json:"status"`
+	SubscribedAt    time.Time `bson:"subscribed_at" json:"subscribed_at"`
+	Lang            string `bson:"lang" json:"lang"`
+	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
 }
 
 type ContactStats struct {
