@@ -31,19 +31,6 @@ type AddContact struct {
 	PhoneNumber        string `bson:"phone_number" json:"phone_number"`
 }
 
-type EditContact struct {
-	ID 				string `json:"id" bson:"id"`
-	LastName        string `json:"last_name" bson:"last_name"`
-	Email           string `json:"email" bson:"email"`
-	PhoneNumber     string `json:"phone_number" bson:"phone_number"`
-	OrganizationID  string `json:"organization_id" bson:"organization_id"`
-	GivenName       string `json:"given_name" bson:"given_name"`
-	Status          string `json:"status" bson:"status"`
-	SubscribedAt    time.Time `json:"subscribed_at" bson:"subscribed_at"`
-	Lang            string `json:"lang" bson:"lang"`
-	NotificationTokens []string `json:"notification_tokens" bson:"notification_tokens"`
-}
-
 type ContactStats struct {
 	SMS           ContactStatsItem
 	Email         ContactStatsItem
@@ -89,7 +76,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args AddCont
 	return &c, nil
 }
 
-func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args EditContact) (*Contact, error) {
+func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact) (*Contact, error) {
 	c := Contact{
 		LastName:        args.LastName,
 		Email:           args.Email,
