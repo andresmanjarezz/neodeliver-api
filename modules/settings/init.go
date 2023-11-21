@@ -14,6 +14,14 @@ func Init(s *graphql.Builder) {
 		}
 	})
 
+	// get team members list
+	s.MongoQuery([]TeamMember{}).Where(func(r rbac.RBAC) map[string]interface{} {
+		return map[string]interface{}{
+			"organization_id": r.OrganizationID,
+			"deleted_at":      nil,
+		}
+	})
+
 	// query contact_settings
 	s.MongoQuery(ContactSettings{}).Where(func(r rbac.RBAC) map[string]interface{} {
 		return map[string]interface{}{
@@ -28,7 +36,9 @@ func Init(s *graphql.Builder) {
 		}
 	})
 
+	s.AddQueryMethods(Query{})
 	s.AddMutationMethods(Mutation{})
 }
 
 type Mutation struct{}
+type Query struct{}
