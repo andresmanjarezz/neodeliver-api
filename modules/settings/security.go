@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/graphql-go/graphql"
@@ -27,18 +28,31 @@ type UpdatePassword struct {
 
 // UpdatePassword updates the password at Auth0.
 func (Mutation) UpdatePassword(p graphql.ResolveParams, rbac rbac.RBAC, args UpdatePassword) (bool, error) {
+	// TODO verify if current password is correct
 
-	// get management access token
-	token, err := getManagementToken()
+	auth := Auth0()
+	res := struct {
+		StatusCode int    `json:"statusCode"`
+		Message    string `json:"message"`
+		Error      string
+	}{}
+
+	url := fmt.Sprintf("/api/v2/users/%s", rbac.UserID)
+	bs, status, err := auth.Patch(p.Context, url, map[string]interface{}{
+		"password": args.New,
+	}, &res)
+
+	// verify response
 	if err != nil {
-		return false, fmt.Errorf("failed to get Auth0 management token: %v", err)
+		fmt.Println(err)
+		// TODO log to sentry
+		return false, errors.New("internal_error")
+	} else if res.StatusCode == 400 {
+		return false, fmt.Errorf(res.Message)
+	} else if status != 200 {
+		fmt.Println(string(bs))
+		return false, fmt.Errorf("failed to update password")
 	}
 
-	// update user password
-	err = updateUserPassword(token, rbac.UserID, args)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return true, err
 }
