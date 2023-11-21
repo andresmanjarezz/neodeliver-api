@@ -40,7 +40,7 @@ type InviteArgs struct {
 func (Mutation) InviteUser(p graphql.ResolveParams, rbac rbac.RBAC, args InviteArgs) (TeamMember, error) {
 	// verify if member already exists in the team
 	u := TeamMember{}
-	err := db.Find(p.Context, &u, map[string]interface{}{
+	_, err := db.Find(p.Context, &u, map[string]interface{}{
 		"deleted_at":      nil,
 		"organization_id": rbac.OrganizationID,
 		"email":           args.Email,
@@ -73,7 +73,7 @@ func (Mutation) InviteUser(p graphql.ResolveParams, rbac rbac.RBAC, args InviteA
 			UpdatedAt:           time.Now(),
 		}
 
-		if err = db.Save(p.Context, &u); err != nil {
+		if _, err = db.Save(p.Context, &u); err != nil {
 			return u, err
 		}
 	} else {
@@ -135,7 +135,7 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 
 	// find team member
 	u := TeamMember{}
-	err = db.Find(p.Context, &u, map[string]interface{}{
+	_, err = db.Find(p.Context, &u, map[string]interface{}{
 		"_id":        claims.ID,
 		"deleted_at": nil,
 	})
@@ -156,7 +156,7 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 
 	// update team member
 	user := User{}
-	err = db.Find(p.Context, &user, map[string]interface{}{
+	_, err = db.Find(p.Context, &user, map[string]interface{}{
 		"_id": rbac.UserID,
 	})
 

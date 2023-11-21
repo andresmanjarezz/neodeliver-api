@@ -61,7 +61,7 @@ func (q *QueryParams) resolveOne(t reflect.Type) graphql.FieldResolveFn {
 
 		result := reflect.New(t).Interface()
 		err := res.Decode(result)
-		return result, err
+		return resultToGraphqlMap(result), err
 	}
 }
 
@@ -80,9 +80,15 @@ func (q *QueryParams) resolveMany(t reflect.Type) graphql.FieldResolveFn {
 			}
 		}
 
-		first := int64(p.Args["first"].(int))
-		skip := int64(p.Args["offset"].(int))
-		// fmt.Println("first", first)
+		first := int64(0)
+		skip := int64(0)
+		if v, ok := p.Args["first"].(int); ok {
+			first = int64(v)
+		}
+
+		if v, ok := p.Args["offset"].(int); ok {
+			skip = int64(v)
+		}
 
 		// find doc
 		cur, err := coll.Find(p.Context, filter, &options.FindOptions{
@@ -97,7 +103,7 @@ func (q *QueryParams) resolveMany(t reflect.Type) graphql.FieldResolveFn {
 		result := reflect.New(t).Interface()
 		err = cur.All(p.Context, result)
 
-		return result, err
+		return resultToGraphqlMap(result), err
 	}
 }
 
@@ -122,15 +128,15 @@ func (q *QueryParams) mergedArgs() graphql.FieldConfigArgument {
 	args := q.whereArgs
 	if args == nil {
 		return q.staticArgs
+	} else if q.staticArgs == nil {
+		return args
 	}
 
-	if q.staticArgs != nil {
-		for k, v := range q.staticArgs {
-			args[k] = v
-		}
+	for k, v := range q.staticArgs {
+		args[k] = v
 	}
 
-	return nil
+	return args
 }
 
 // execute function after resolve
