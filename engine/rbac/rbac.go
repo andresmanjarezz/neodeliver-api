@@ -16,7 +16,7 @@ func Load(req *http.Request) (RBAC, error) {
 	// TODO load rbac from request
 	return RBAC{
 		SUB:            "oauth0|token",
-		UserID:         "328f9c39-9fff-40e1-bccd-40a0d7506fa7",
+		UserID:         "auth0|655c75b291c2f4235db683fa",
 		OrganizationID: "56cde8c6-5af5-11ee-8c99-0242ac120002",
 		Scopes: map[string]bool{
 			"users:read": true,

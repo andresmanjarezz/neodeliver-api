@@ -20,8 +20,7 @@ import (
 func main() {
 	fmt.Println("Starting graphql server...")
 
-	// init
-	godotenv.Load()
+	godotenv.Overload()
 	defer db.Close()
 
 	// create schema
