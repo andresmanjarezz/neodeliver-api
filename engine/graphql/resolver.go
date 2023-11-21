@@ -112,6 +112,10 @@ func (t *TypesBuilder) graphqlArguments(in reflect.Type, superCreate argumentsCr
 	// Add graphql arguments
 	for f := 0; f < in.NumField(); f++ {
 		arg := in.Field(f)
+		if arg.Anonymous {
+			panic("anonymous fields are not supported on args")
+		}
+
 		name := ToSnakeCase(arg.Name)
 
 		if n := arg.Tag.Get("graphql"); n != "" {
@@ -213,8 +217,18 @@ func (t *TypesBuilder) Method(fn interface{}, locked func(graphql.ResolveParams)
 	// Create resolver and get arguments
 	resolve, args := t.toGraphqlResolver(v, locked)
 	field := &graphql.Field{
-		Resolve: resolve,
-		Args:    args,
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			res, err := resolve(p)
+			if err != nil {
+				return nil, err
+			}
+
+			res = resultToGraphqlMap(res)
+			bs, _ := json.MarshalIndent(res, "", "  ")
+			fmt.Println(string(bs))
+			return res, nil
+		},
+		Args: args,
 	}
 
 	// Add output type
@@ -254,10 +268,75 @@ func (t *TypesBuilder) ExtractFields(kind reflect.Value, locked func(graphql.Res
 	return res
 }
 
-// func AdminID(p graphql.ResolveParams) int {
-// 	return p.Context.Value("admin_id").(int)
-// }
+// ---
 
-// func AdminIP(p graphql.ResolveParams) string {
-// 	return p.Context.Value("ip").(string)
-// }
+func resultToGraphqlMap(i interface{}) interface{} {
+	if i == nil {
+		return i
+	}
+
+	t := reflect.TypeOf(i)
+	if t.Kind() == reflect.Pointer || t.Kind() == reflect.UnsafePointer {
+		t = t.Elem()
+		i = reflect.ValueOf(i).Elem().Interface()
+	}
+
+	// convert lists
+	if t.Kind() == reflect.Slice {
+		res := []interface{}{}
+		val := reflect.ValueOf(i)
+
+		for i := 0; i < val.Len(); i++ {
+			res = append(res, resultToGraphqlMap(val.Index(i).Interface()))
+		}
+
+		return res
+	}
+
+	// convert objects
+	if t.Kind() == reflect.Struct && t.Name() != "Time" {
+		res := map[string]interface{}{}
+		resultToGraphqlMapToMap(i, res)
+		return res
+	}
+
+	return i
+}
+
+func resultToGraphqlMapToMap(i interface{}, res map[string]interface{}) {
+	val := reflect.ValueOf(i)
+	t := reflect.TypeOf(i)
+
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		name := field.Name
+		spl := strings.Split(field.Tag.Get("json"), ",")
+
+		if n := field.Tag.Get("graphql"); n != "" {
+			name = n
+		} else if n := spl[0]; n != "" {
+			name = n
+		} else {
+			name = ToSnakeCase(name)
+		}
+
+		f := val.Field(i)
+		if field.Anonymous {
+			if !f.IsZero() {
+				resultToGraphqlMapToMap(f.Interface(), res)
+			}
+
+			continue
+		}
+
+		if f.IsZero() {
+			res[name] = nil
+		} else {
+			res[name] = resultToGraphqlMap(f.Interface())
+		}
+	}
+}

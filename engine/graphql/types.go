@@ -45,30 +45,14 @@ func FieldsFactory(kind reflect.Type, fieldHandler func(string, reflect.StructFi
 			name = ToSnakeCase(field.Name)
 		}
 
+		// handle embeded fields
+		if field.Anonymous {
+			FieldsFactory(field.Type, fieldHandler)
+			continue
+		}
+
 		fieldHandler(name, field)
 		continue
-
-		// Testing out inheritance embed of fields
-		// Does not work.
-		/*
-			if (!field.Anonymous) {
-				// Not anonymous, just handle
-				fieldHandler(name, field)
-				continue
-			}
-
-			// Anonymous, struct used as extension
-			for iSub := 0; iSub < field.Type.NumField(); iSub++ {
-				subfield := field.Type.Field(iSub)
-				nameSub := subfield.Tag.Get("graphql")
-				if nameSub == "-" {
-					continue
-				} else if nameSub == "" {
-					nameSub = ToSnakeCase(subfield.Name)
-				}
-				fieldHandler(nameSub, subfield)
-			}
-		*/
 	}
 }
 

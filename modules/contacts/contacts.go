@@ -4,32 +4,10 @@ import (
 	"time"
 
 	"github.com/graphql-go/graphql"
-	"neodeliver.com/engine/rbac"
+	"github.com/segmentio/ksuid"
 	"neodeliver.com/engine/db"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"neodeliver.com/engine/rbac"
 )
-
-type Contact struct {
-	ID				   string `json:"id" bson:"_id,omitempty"`
-	OrganizationID     string `bson:"organization_id" json:"organization_id"`
-	GivenName          string `bson:"given_name" json:"given_name"`
-	LastName           string `bson:"last_name" json:"last_name"`
-	Email              string `bson:"email" json:"email"`
-	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
-	PhoneNumber        string `bson:"phone_number" json:"phone_number"`
-	Status             string `bson:"status" json:"status"`
-	SubscribedAt       time.Time `bson:"subscribed_at" json:"subscribed_at"`
-	Lang               string `bson:"lang" json:"lang"`
-}
-
-type AddContact struct {
-	OrganizationID     string `bson:"organization_id" json:"organization_id"`
-	GivenName          string `bson:"given_name" json:"given_name"`
-	LastName           string `bson:"last_name" json:"last_name"`
-	Email              string `bson:"email" json:"email"`
-	PhoneNumber        string `bson:"phone_number" json:"phone_number"`
-}
 
 type ContactStats struct {
 	SMS           ContactStatsItem
@@ -46,63 +24,84 @@ type ContactStatsItem struct {
 	LastMessageClicked time.Time
 }
 
+// ----
+
+type ContactData struct {
+	ExternalID         *string  `bson:"external_id" json:"external_id"` // used to map to external systems => unique per org
+	GivenName          *string  `bson:"given_name" json:"given_name"`
+	LastName           *string  `bson:"last_name" json:"last_name"`
+	Email              *string  `bson:"email" json:"email"`
+	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
+	PhoneNumber        *string  `bson:"phone_number" json:"phone_number"`
+	Lang               string   `bson:"lang" json:"lang"`
+}
+
+func (c ContactData) Validate() error {
+	// TODO verify email & phone format
+	// TODO very language known
+	// TODO verify notification tokens format
+
+	return nil
+}
+
+type Contact struct {
+	ID             string    `json:"id" bson:"_id,omitempty"`
+	OrganizationID string    `bson:"organization_id"`
+	Status         string    `bson:"status" json:"status"`
+	SubscribedAt   time.Time `bson:"subscribed_at" json:"subscribed_at"`
+	ContactData    `bson:",inline" json:",inline"`
+}
+
 type ContactID struct {
-	ID                 string `bson:"_id, omitempty"`
+	ID string `bson:"_id, omitempty"`
 }
 
-func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args AddContact) (*Contact, error) {
+func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactData) (Contact, error) {
 	c := Contact{
-		LastName:        args.LastName,
-		Email:           args.Email,
-		PhoneNumber:     args.PhoneNumber,
-		OrganizationID:  args.OrganizationID,
-		GivenName:       args.GivenName,
-		Status:          "ACTIVE", // Assuming a default status
-		SubscribedAt:    time.Now(), // Setting the current time as the subscribed_at value
-		Lang: 			 "english",
-		NotificationTokens: make([]string, 0),
+		ID:             "ctc_" + ksuid.New().String(),
+		OrganizationID: rbac.OrganizationID,
+		Status:         "ACTIVE", // Assuming a default status
+		SubscribedAt:   time.Now(),
+		ContactData:    args,
 	}
 
-	insertResult, err := db.Save(p.Context, &c)
-	if err != nil {
-		return nil, err
-	}
-	filter := bson.M{"_id": insertResult.InsertedID}
-	_, err = db.Find(p.Context, &c, filter)
-	if err != nil {
-		return nil, err
+	if err := c.Validate(); err != nil {
+		return c, err
 	}
 
-	return &c, nil
+	// TODO assert unique email within org
+	// TODO verify external id is unique within org or override data
+
+	_, err := db.Save(p.Context, &c)
+	return c, err
 }
 
-func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact) (*Contact, error) {
-	c := Contact{
-		LastName:        args.LastName,
-		Email:           args.Email,
-		PhoneNumber:     args.PhoneNumber,
-		OrganizationID:  args.OrganizationID,
-		GivenName:       args.GivenName,
-		Status:          args.Status,
-		SubscribedAt:    args.SubscribedAt,
-		Lang: 			 args.Lang,
-		NotificationTokens: args.NotificationTokens,
+// ---
+
+type ContactEdit struct {
+	ID   string
+	Data ContactData // TODO support inline
+}
+
+func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
+	if err := args.Data.Validate(); err != nil {
+		return Contact{}, err
 	}
-	objectID, _ := primitive.ObjectIDFromHex(args.ID)
-	filter := bson.M{"_id": objectID}
+
+	// TODO assert unique email if changed
+	// TODO verify external id is unique within org or override data
 
 	// Save the updated contact to the database
-	err := db.Update(p.Context, &c, filter, &c)
-	if err != nil {
-		return nil, err
-	}
+	c := Contact{}
+	err := db.Update(p.Context, &c, map[string]string{
+		"_id": args.ID,
+	}, args.Data)
 
-	return &c, nil
+	return c, err
 }
 
 func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter ContactID) (bool, error) {
 	c := Contact{}
-	objectID, _ := primitive.ObjectIDFromHex(filter.ID)
-	err := db.Delete(p.Context, &c, bson.M{"_id": objectID})
-	return false, err
+	err := db.Delete(p.Context, &c, map[string]string{"_id": filter.ID})
+	return true, err
 }
