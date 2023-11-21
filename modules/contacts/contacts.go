@@ -102,6 +102,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 
 func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter ContactID) (bool, error) {
 	c := Contact{}
-	err := db.Delete(p.Context, &c, bson.M{"_id": filter.ID})
+	objectID, _ := primitive.ObjectIDFromHex(filter.ID)
+	err := db.Delete(p.Context, &c, bson.M{"_id": objectID})
 	return false, err
 }

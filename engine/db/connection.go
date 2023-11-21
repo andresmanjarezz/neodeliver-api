@@ -7,13 +7,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"fmt"
 
 	"github.com/gertd/go-pluralize"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	// "go.mongodb.org/mongo-driver/bson/primitive"
-	// "go.mongodb.org/mongo-driver/bson"
 )
 
 var client *mongo.Client
@@ -59,7 +56,7 @@ func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*optio
 
 func Save(ctx context.Context, o interface{}) (*mongo.InsertOneResult, error) {
 	c := Client().Collection(CollectionName(o))
-	insertResult, err := c.InsertOne(ctx, o)	
+	insertResult, err := c.InsertOne(ctx, o)
 	return insertResult, err
 }
 
@@ -85,7 +82,6 @@ func Update(ctx context.Context, o interface{}, filter interface{}, update inter
 func Delete(ctx context.Context, o interface{}, filter interface{}) error {
 	c := Client().Collection(CollectionName(o))
 	_, err := c.DeleteOne(ctx, filter)
-	fmt.Println(filter)
 	return err
 }
 
