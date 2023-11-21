@@ -116,12 +116,7 @@ func (t *TypesBuilder) graphqlArguments(in reflect.Type, superCreate argumentsCr
 			panic("anonymous fields are not supported on args")
 		}
 
-		name := ToSnakeCase(arg.Name)
-
-		if n := arg.Tag.Get("graphql"); n != "" {
-			name = n
-		}
-
+		name := ReflectName(arg)
 		names = append(names, name)
 		kind := t.Type(arg.Type, true, false)
 
@@ -224,8 +219,6 @@ func (t *TypesBuilder) Method(fn interface{}, locked func(graphql.ResolveParams)
 			}
 
 			res = resultToGraphqlMap(res)
-			bs, _ := json.MarshalIndent(res, "", "  ")
-			fmt.Println(string(bs))
 			return res, nil
 		},
 		Args: args,
