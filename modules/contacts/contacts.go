@@ -11,6 +11,7 @@ import (
 )
 
 type Contact struct {
+	ID				   string `json:"id" bson:"_id,omitempty"`
 	OrganizationID     string `bson:"organization_id" json:"organization_id"`
 	GivenName          string `bson:"given_name" json:"given_name"`
 	LastName           string `bson:"last_name" json:"last_name"`
@@ -31,16 +32,16 @@ type AddContact struct {
 }
 
 type EditContact struct {
-	ID 				string `bson:"id" json:"id"`
-	LastName        string `bson:"last_name" json:"last_name"`
-	Email           string `bson:"email" json:"email"`
-	PhoneNumber     string `bson:"phone_number" json:"phone_number"`
-	OrganizationID  string `bson:"organization_id" json:"organization_id"`
-	GivenName       string `bson:"given_name" json:"given_name"`
-	Status          string `bson:"status" json:"status"`
-	SubscribedAt    time.Time `bson:"subscribed_at" json:"subscribed_at"`
-	Lang            string `bson:"lang" json:"lang"`
-	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
+	ID 				string `json:"id" bson:"id"`
+	LastName        string `json:"last_name" bson:"last_name"`
+	Email           string `json:"email" bson:"email"`
+	PhoneNumber     string `json:"phone_number" bson:"phone_number"`
+	OrganizationID  string `json:"organization_id" bson:"organization_id"`
+	GivenName       string `json:"given_name" bson:"given_name"`
+	Status          string `json:"status" bson:"status"`
+	SubscribedAt    time.Time `json:"subscribed_at" bson:"subscribed_at"`
+	Lang            string `json:"lang" bson:"lang"`
+	NotificationTokens []string `json:"notification_tokens" bson:"notification_tokens"`
 }
 
 type ContactStats struct {
@@ -120,10 +121,6 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Edit
 
 func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter ContactID) (bool, error) {
 	c := Contact{}
-	objectID, _ := primitive.ObjectIDFromHex(filter.ID)
-	err := db.Delete(p.Context, &c, bson.M{"_id": objectID})
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	err := db.Delete(p.Context, &c, bson.M{"_id": filter.ID})
+	return false, err
 }
