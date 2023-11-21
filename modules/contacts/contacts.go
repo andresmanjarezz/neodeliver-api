@@ -1,11 +1,13 @@
 package contacts
 
 import (
+	"errors"
 	"time"
 
 	"github.com/graphql-go/graphql"
 	"github.com/segmentio/ksuid"
 	"neodeliver.com/engine/db"
+	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/rbac"
 )
 
@@ -88,6 +90,12 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 		return Contact{}, err
 	}
 
+	// only update the fields that were passed in params
+	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
+	if len(data) == 0 {
+		return Contact{}, errors.New("no data to update")
+	}
+
 	// TODO assert unique email if changed
 	// TODO verify external id is unique within org or override data
 
@@ -95,7 +103,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	c := Contact{}
 	err := db.Update(p.Context, &c, map[string]string{
 		"_id": args.ID,
-	}, args.Data)
+	}, data)
 
 	return c, err
 }
