@@ -19,25 +19,29 @@ import (
 var auth *auth0
 
 type auth0 struct {
-	tenant       string
-	clientID     string
-	clientSecret string
-	audience     string
-	connection   string
-	token        string
-	tokenExp     time.Time
+	tenant           string
+	clientID         string
+	clientSecret     string
+	passClientID     string
+	passClientSecret string
+	audience         string
+	connection       string
+	token            string
+	tokenExp         time.Time
 }
 
 // InitAuth initializes Auth0 configurations.
 func Auth0() *auth0 {
 	if auth == nil {
 		auth = &auth0{
-			tenant:       os.Getenv("AUTH0_TENANT"),
-			token:        os.Getenv("AUTH0_TOKEN"),
-			clientID:     os.Getenv("AUTH0_MANAGEMENT_CLIENT_ID"),
-			clientSecret: os.Getenv("AUTH0_MANAGEMENT_CLIENT_SECRET"),
-			audience:     os.Getenv("AUTH0_MANAGEMENT_AUDIENCE"),
-			connection:   os.Getenv("AUTH0_MANAGEMENT_CONNECTION"),
+			tenant:           os.Getenv("AUTH0_TENANT"),
+			token:            os.Getenv("AUTH0_TOKEN"),
+			clientID:         os.Getenv("AUTH0_MANAGEMENT_CLIENT_ID"),
+			clientSecret:     os.Getenv("AUTH0_MANAGEMENT_CLIENT_SECRET"),
+			audience:         os.Getenv("AUTH0_MANAGEMENT_AUDIENCE"),
+			connection:       os.Getenv("AUTH0_MANAGEMENT_CONNECTION"),
+			passClientID:     os.Getenv("AUTH0_PASSWORD_CLIENT_ID"),
+			passClientSecret: os.Getenv("AUTH0_PASSWORD_CLIENT_SECRET"),
 		}
 
 		if auth.token != "" {
@@ -131,7 +135,6 @@ func (a *auth0) Request(ctx context.Context, method string, url string, body int
 		url = fmt.Sprintf("https://%s%s", a.tenant, url)
 	}
 
-	fmt.Println("url", url)
 	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
 		return nil, 0, err
@@ -173,6 +176,72 @@ func (a *auth0) Post(ctx context.Context, url string, body interface{}, res inte
 
 func (a *auth0) Patch(ctx context.Context, url string, body interface{}, res interface{}) ([]byte, int, error) {
 	return a.Request(ctx, "PATCH", url, body, res)
+}
+
+func (a *auth0) Get(ctx context.Context, url string, res interface{}) ([]byte, int, error) {
+	return a.Request(ctx, "GET", url, nil, res)
+}
+
+// ----
+
+func (a *auth0) VerifyPassword(ctx context.Context, user_id string, password string) (bool, string, error) {
+	if a.passClientID == "" {
+		return false, "", errors.New("auth0 password client id is not set. Please set the AUTH0_PASSWORD_CLIENT_ID environment variable")
+	} else if a.passClientSecret == "" {
+		return false, "", errors.New("auth0 password client secret is not set. Please set the AUTH0_PASSWORD_CLIENT_SECRET environment variable")
+	}
+
+	res := struct {
+		Error       string
+		AccessToken string `json:"access_token"`
+		Email       string
+		Identities  []struct {
+			UserID     string `json:"user_id"`
+			Provider   string `json:"provider"`
+			Connection string `json:"connection"`
+		}
+	}{}
+
+	// find username & connection
+	_, _, err := a.Get(ctx, "/api/v2/users/"+user_id, &res)
+	if err != nil {
+		return false, "", err
+	} else if res.Error != "" {
+		return false, "", errors.New(res.Error)
+	} else if res.Email == "" {
+		return false, "", errors.New("could not find user email")
+	}
+
+	connection := ""
+	for _, identity := range res.Identities {
+		if identity.Provider+"|"+identity.UserID == user_id {
+			connection = identity.Connection
+			break
+		}
+	}
+
+	if connection == "" {
+		return false, "", errors.New("could not find user connection")
+	}
+
+	// verify password
+	_, _, err = a.Post(ctx, "/oauth/token", map[string]interface{}{
+		"grant_type":    "password",
+		"client_id":     a.passClientID,
+		"client_secret": a.passClientSecret,
+		"scope":         "read:sample",
+		"connection":    connection,
+		"username":      res.Email,
+		"password":      password,
+	}, &res)
+
+	if err != nil {
+		return false, connection, err
+	} else if res.Error != "" && res.Error != "invalid_grant" {
+		return false, connection, errors.New(res.Error)
+	}
+
+	return res.AccessToken != "", connection, nil
 }
 
 // ----
