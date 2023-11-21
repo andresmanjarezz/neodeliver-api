@@ -57,9 +57,9 @@ func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*optio
 	return result, err
 }
 
-func Save(ctx context.Context, o interface{}, payload interface{}) (*mongo.InsertOneResult, error) {
+func Save(ctx context.Context, o interface{}) (*mongo.InsertOneResult, error) {
 	c := Client().Collection(CollectionName(o))
-	insertResult, err := c.InsertOne(ctx, payload)	
+	insertResult, err := c.InsertOne(ctx, o)	
 	return insertResult, err
 }
 
