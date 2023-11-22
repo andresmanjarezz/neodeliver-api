@@ -9,6 +9,7 @@ import (
 	"neodeliver.com/engine/db"
 	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/rbac"
+	utils "neodeliver.com/utils"
 )
 
 type ContactStats struct {
@@ -39,8 +40,17 @@ type ContactData struct {
 }
 
 func (c ContactData) Validate() error {
-	// TODO verify email & phone format
+	match, _ := utils.ValidateEmail(c.Email)
+	if !match {
+		return errors.New("Email address is not valid")
+	}
+	match, _ = utils.ValidatePhone(c.PhoneNumber)
+	if !match {
+		return errors.New("Phone number is not valid")
+	}
+
 	// TODO very language known
+
 	// TODO verify notification tokens format
 
 	return nil
@@ -71,8 +81,15 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 		return c, err
 	}
 
-	// TODO assert unique email within org
-	// TODO verify external id is unique within org or override data
+	numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "email": *args.Email})
+	if numberOfSameEmail >= 1 {
+		return c, errors.New("The email is already registered within your organization")
+	}
+
+	numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "external_id": *args.ExternalID})
+	if numberOfSameID >= 1 {
+		return c, errors.New("The ID is duplicated within your organization")
+	}
 
 	_, err := db.Save(p.Context, &c)
 	return c, err
@@ -82,7 +99,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 
 type ContactEdit struct {
 	ID   string
-	Data ContactData // TODO support inline
+	Data ContactData	`json:"data" bson:"data"`
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
@@ -96,11 +113,23 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 		return Contact{}, errors.New("no data to update")
 	}
 
-	// TODO assert unique email if changed
-	// TODO verify external id is unique within org or override data
+	c := Contact{}
+
+	if args.Data.Email != nil {
+		numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "email": *args.Data.Email})
+		if numberOfSameEmail >= 1 {
+			return c, errors.New("The email is duplicated within your organization")
+		}
+	}
+
+	if args.Data.ExternalID != nil {
+		numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "external_id": *args.Data.ExternalID})
+		if numberOfSameID >= 1 {
+			return c, errors.New("The ID is duplicated within your organization")
+		}
+	}
 
 	// Save the updated contact to the database
-	c := Contact{}
 	err := db.Update(p.Context, &c, map[string]string{
 		"_id": args.ID,
 	}, data)
