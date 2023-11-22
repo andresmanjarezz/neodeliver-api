@@ -54,6 +54,15 @@ func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*optio
 	return result, err
 }
 
+func Count(ctx context.Context, o interface{}, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+	c := Client()
+	count, err := c.Collection(CollectionName(o)).CountDocuments(ctx, filter, opts...)
+	if err != nil {
+		return 0, err
+	}
+	return count, err
+}
+
 func Save(ctx context.Context, o interface{}) (*mongo.InsertOneResult, error) {
 	c := Client().Collection(CollectionName(o))
 	insertResult, err := c.InsertOne(ctx, o)
