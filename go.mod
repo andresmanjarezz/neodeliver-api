@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/emvi/iso-639-1 v1.1.0 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
