@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	parser "net/url"
 	"os"
 	"strings"
 	"time"
@@ -57,8 +58,8 @@ func Auth0() *auth0 {
 func (a *auth0) getToken(ctx context.Context) (string, error) {
 	if a.token != "" && a.tokenExp.After(time.Now()) {
 		return a.token, nil
-	} else if a.tenant != "" {
-		panic("test")
+	} else if a.tenant == "" {
+		return "", errors.New("auth0 tenant is not set. Please set the AUTH0_TENANT environment variable")
 	}
 
 	if a.clientID == "" {
@@ -142,7 +143,12 @@ func (a *auth0) Request(ctx context.Context, method string, url string, body int
 
 	req.Header.Add("Content-Type", "application/json")
 
-	if url != "/oauth/token" {
+	rawURL, err := parser.Parse(url)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if rawURL.Path != "/oauth/token" {
 		token, err := a.getToken(ctx)
 		if err != nil {
 			return nil, 401, err
