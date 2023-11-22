@@ -3,6 +3,7 @@ package contacts
 import (
 	"errors"
 	"time"
+	"fmt"
 
 	"github.com/graphql-go/graphql"
 	"github.com/segmentio/ksuid"
@@ -36,20 +37,28 @@ type ContactData struct {
 	Email              *string  `bson:"email" json:"email"`
 	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
 	PhoneNumber        *string  `bson:"phone_number" json:"phone_number"`
-	Lang               string   `bson:"lang" json:"lang"`
+	Lang               *string   `bson:"lang" json:"lang"`
 }
 
 func (c ContactData) Validate() error {
-	match, _ := utils.ValidateEmail(c.Email)
+	match := utils.ValidateEmail(c.Email)
 	if !match {
 		return errors.New("Email address is not valid")
 	}
-	match, _ = utils.ValidatePhone(c.PhoneNumber)
+	match = utils.ValidatePhone(c.PhoneNumber)
 	if !match {
 		return errors.New("Phone number is not valid")
 	}
-
-	// TODO very language known
+	match = utils.ValidateLanguageCode(c.Lang)
+	if !match {
+		return errors.New("Language is not valid")
+	}
+	for _, token := range c.NotificationTokens {
+		if !utils.ValidateNotificationToken(&token) {
+			fmt.Println(token)
+			return errors.New("Notification tokens include invalid token")
+		}
+	}
 
 	// TODO verify notification tokens format
 
