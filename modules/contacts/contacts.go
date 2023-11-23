@@ -126,14 +126,14 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	c := Contact{}
 
 	if args.Data.Email != nil {
-		numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "email": *args.Data.Email})
+		numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "email": *args.Data.Email})
 		if numberOfSameEmail >= 1 {
 			return c, errors.New("The email is duplicated within your organization")
 		}
 	}
 
 	if args.Data.ExternalID != nil {
-		numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "external_id": *args.Data.ExternalID})
+		numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "external_id": *args.Data.ExternalID})
 		if numberOfSameID >= 1 {
 			return c, errors.New("The ID is duplicated within your organization")
 		}
