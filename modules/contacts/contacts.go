@@ -75,6 +75,16 @@ type ContactID struct {
 	ID string `bson:"_id, omitempty"`
 }
 
+type ContactEdit struct {
+	ID   string
+	Data ContactData	`json:"data" bson:"data"`
+}
+
+type TagAssign struct {
+	ContactID	string
+	TagID		string
+}
+
 func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactData) (Contact, error) {
 	c := Contact{
 		ID:             "ctc_" + ksuid.New().String(),
@@ -100,13 +110,6 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 
 	_, err := db.Save(p.Context, &c)
 	return c, err
-}
-
-// ---
-
-type ContactEdit struct {
-	ID   string
-	Data ContactData	`json:"data" bson:"data"`
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
@@ -148,4 +151,20 @@ func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter Co
 	c := Contact{}
 	err := db.Delete(p.Context, &c, map[string]string{"_id": filter.ID})
 	return true, err
+}
+
+type ContactTag struct {
+	ID			string	`bson:"_id"`
+	ContactID	string	`bson:"contact_id" json:"contact_id"`
+	TagID		string	`bson:"tag_id" json:"tag_id"`
+}
+
+func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (ContactTag, error) {
+	r := ContactTag{
+		ID:			"ctc_tag_" + ksuid.New().String(),
+		ContactID:	args.ContactID,
+		TagID:		args.TagID,
+	}
+	_, err := db.Save(p.Context, &r)
+	return r, err
 }
