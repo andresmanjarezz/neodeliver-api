@@ -3,7 +3,6 @@ package contacts
 import (
 	"errors"
 	"time"
-	"fmt"
 
 	"github.com/graphql-go/graphql"
 	"github.com/segmentio/ksuid"
@@ -55,7 +54,6 @@ func (c ContactData) Validate() error {
 	}
 	for _, token := range c.NotificationTokens {
 		if !utils.ValidateNotificationToken(&token) {
-			fmt.Println(token)
 			return errors.New("Notification tokens include invalid token")
 		}
 	}

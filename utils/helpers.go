@@ -27,3 +27,9 @@ func ValidateNotificationToken(token *string) bool {
 	match, _ := regexp.MatchString(tokenRegex, *token)
 	return match
 }
+
+func ValidateMongoDBQuery(query *string) bool {
+	queryRegex := `\{\s*\$[a-zA-Z]+\s*:\s*\[.*\]\s*\}`
+	match, _ := regexp.MatchString(queryRegex, *query)
+	return match
+}
