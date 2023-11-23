@@ -1,99 +1,91 @@
 package contacts
 
 import (
+	"errors"
 	"time"
 
 	"github.com/graphql-go/graphql"
-	"neodeliver.com/engine/rbac"
+	"github.com/segmentio/ksuid"
 	"neodeliver.com/engine/db"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	ggraphql "neodeliver.com/engine/graphql"
+	"neodeliver.com/engine/rbac"
+	utils "neodeliver.com/utils"
 )
 
 type Segment struct {
 	ID             string `bson:"_id,omitempty" json:"id"`
-	OrganizationID string `bson:"organization_id" json:"organization_id"`
-	Name           string `bson:"name" json:"name"`
-	Filters		   string `bson:"filters" json:"filters"`
-	Subscription   int	  `bson:"subscription" json:"subscription"`
+	OrganizationID string    `bson:"organization_id"`
 	OpensCount	   int    `bson:"opens_count" json:"opens_count"`
 	ClickRate	   int	  `bson:"click_rate" json:"click_rate"`
 	MailsSentCount int	  `bson:"mails_sent_count" json:"mail_sent_count"`
 	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
+	SegmentData			`bson:",inline" json:",inline"`
 }
 
-type CreateSegment struct {
-	OrganizationID string `bson:"organization_id" json:"organization_id"`
-	Name           string `bson:"_id,omitempty" json:"id"`
-	Filters		   string `bson:"filters" json:"filters"`
+type SegmentData struct {
+	Name           *string `bson:"name" json:"name"`
+	Filters		   *string `bson:"filters" json:"filters"`
+	Subscription   *int	  `bson:"subscription" json:"subscription"`
 }
 
 type SegmentID struct {
 	ID			   string `bson:"_id, omitempty"`
 }
 
-func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args CreateSegment) (*Segment, error) {
+func (s SegmentData) Validate() error {
+	match := utils.ValidateMongoDBQuery(s.Filters)
+	if !match {
+		return errors.New("Filter query is not valid")
+	}
+	return nil
+}
+
+func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentData) (Segment, error) {
 	s := Segment{
-		Name:			args.Name,
-		OrganizationID:	args.OrganizationID,
-		Filters:		args.Filters,
-		Subscription:	0,
+		ID:				"sgt_" + ksuid.New().String(),
+		OrganizationID:	rbac.OrganizationID,
 		OpensCount:		0,
 		ClickRate:		0,
 		MailsSentCount:	0,
 		CreatedAt:		time.Now(),
+		SegmentData:	args,
 	}
 
-	insertResult, err := db.Save(p.Context, &s)
-	if err != nil {
-		return nil, err
+	if err := s.Validate(); err != nil {
+		return s, err
 	}
 
-	filter := bson.M{"_id": insertResult.InsertedID}
-	_, err = db.Find(p.Context, &s, filter)
-	if err != nil {
-		return nil, err
-	}
+	_, err := db.Save(p.Context, &s)
 
-	return &s, nil
+	return s, err
 }
 
-func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segment) (*Segment, error) {
-	s := Segment{
-		Name:			args.Name,
-		OrganizationID:	args.OrganizationID,
-		Filters:		args.Filters,
-		Subscription:	args.Subscription,
-		OpensCount:		args.OpensCount,
-		ClickRate:		args.ClickRate,
-		MailsSentCount:	args.MailsSentCount,
+type SegmentEdit struct {
+	ID		string
+	Data	SegmentData	`json:"data"`
+}
+
+func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentEdit) (Segment, error) {
+	if err := args.Data.Validate(); err != nil {
+		return Segment{}, err
+	}
+	// only update the fields that were passed in params
+	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
+	if len(data) == 0 {
+		return Segment{}, errors.New("no data to update")
 	}
 
-	objectID, _ := primitive.ObjectIDFromHex(args.ID)
-	filter := bson.M{"_id": objectID}
+	s := Segment{}
 
-	err := db.Update(p.Context, &s, filter, &s)
-	if err != nil {
-		return nil, err
-	}
+	err := db.Update(p.Context, &s, map[string]string{
+		"_id": args.ID,
+	}, data)
 
-	return &s, nil
+	return s, err
 }
 
 func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter SegmentID) (bool, error) {
 	s := Segment{}
-	objectID, _ := primitive.ObjectIDFromHex(filter.ID)
-	err := db.Delete(p.Context, &s, bson.M{"_id": objectID})
-	if err != nil {
-		return false, err
-	}
+	err := db.Delete(p.Context, &s, map[string]string{"_id": filter.ID})
 	return true, err
 }
-
-// func (Mutation) SendNewMail(p graphql.ResolveParams, rbac rbac.RBAC, filter SegmentID) (*Segment, error) {
-// 	s := Segment{}
-// 	objectID, err := primitive.ObjectIDFromHex(filter.ID)
-// 	t, _ := db.Find(p.Context, &s, bson.M{"_id": objectID})
-// 	fmt.Println(t.(Segment))
-// 	return &s, err
-// }
