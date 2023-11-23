@@ -6,6 +6,7 @@ require (
 	github.com/GoogleCloudPlatform/functions-framework-go v1.8.0
 	github.com/aws/aws-lambda-go v1.41.0
 	github.com/awslabs/aws-lambda-go-api-proxy v0.14.0
+	github.com/emvi/iso-639-1 v1.1.0
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/getsentry/sentry-go v0.24.1
 	github.com/go-playground/validator/v10 v10.11.1

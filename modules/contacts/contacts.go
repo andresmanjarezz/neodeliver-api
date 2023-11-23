@@ -9,6 +9,7 @@ import (
 	"neodeliver.com/engine/db"
 	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/rbac"
+	utils "neodeliver.com/utils"
 )
 
 type ContactStats struct {
@@ -35,12 +36,28 @@ type ContactData struct {
 	Email              *string  `bson:"email" json:"email"`
 	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
 	PhoneNumber        *string  `bson:"phone_number" json:"phone_number"`
-	Lang               string   `bson:"lang" json:"lang"`
+	Lang               *string   `bson:"lang" json:"lang"`
 }
 
 func (c ContactData) Validate() error {
-	// TODO verify email & phone format
-	// TODO very language known
+	match := utils.ValidateEmail(c.Email)
+	if !match {
+		return errors.New("Email address is not valid")
+	}
+	match = utils.ValidatePhone(c.PhoneNumber)
+	if !match {
+		return errors.New("Phone number is not valid")
+	}
+	match = utils.ValidateLanguageCode(c.Lang)
+	if !match {
+		return errors.New("Language is not valid")
+	}
+	for _, token := range c.NotificationTokens {
+		if !utils.ValidateNotificationToken(&token) {
+			return errors.New("Notification tokens include invalid token")
+		}
+	}
+
 	// TODO verify notification tokens format
 
 	return nil
@@ -58,6 +75,16 @@ type ContactID struct {
 	ID string `bson:"_id, omitempty"`
 }
 
+type ContactEdit struct {
+	ID   string
+	Data ContactData	`json:"data" bson:"data"`
+}
+
+type TagAssign struct {
+	ContactID	string
+	TagID		string
+}
+
 func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactData) (Contact, error) {
 	c := Contact{
 		ID:             "ctc_" + ksuid.New().String(),
@@ -71,18 +98,18 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 		return c, err
 	}
 
-	// TODO assert unique email within org
-	// TODO verify external id is unique within org or override data
+	numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "email": *args.Email})
+	if numberOfSameEmail >= 1 {
+		return c, errors.New("The email is already registered within your organization")
+	}
+
+	numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "external_id": *args.ExternalID})
+	if numberOfSameID >= 1 {
+		return c, errors.New("The ID is duplicated within your organization")
+	}
 
 	_, err := db.Save(p.Context, &c)
 	return c, err
-}
-
-// ---
-
-type ContactEdit struct {
-	ID   string
-	Data ContactData // TODO support inline
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
@@ -96,11 +123,23 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 		return Contact{}, errors.New("no data to update")
 	}
 
-	// TODO assert unique email if changed
-	// TODO verify external id is unique within org or override data
+	c := Contact{}
+
+	if args.Data.Email != nil {
+		numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "email": *args.Data.Email})
+		if numberOfSameEmail >= 1 {
+			return c, errors.New("The email is duplicated within your organization")
+		}
+	}
+
+	if args.Data.ExternalID != nil {
+		numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "external_id": *args.Data.ExternalID})
+		if numberOfSameID >= 1 {
+			return c, errors.New("The ID is duplicated within your organization")
+		}
+	}
 
 	// Save the updated contact to the database
-	c := Contact{}
 	err := db.Update(p.Context, &c, map[string]string{
 		"_id": args.ID,
 	}, data)
@@ -112,4 +151,20 @@ func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter Co
 	c := Contact{}
 	err := db.Delete(p.Context, &c, map[string]string{"_id": filter.ID})
 	return true, err
+}
+
+type ContactTag struct {
+	ID			string	`bson:"_id"`
+	ContactID	string	`bson:"contact_id" json:"contact_id"`
+	TagID		string	`bson:"tag_id" json:"tag_id"`
+}
+
+func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (ContactTag, error) {
+	r := ContactTag{
+		ID:			"ctc_tag_" + ksuid.New().String(),
+		ContactID:	args.ContactID,
+		TagID:		args.TagID,
+	}
+	_, err := db.Save(p.Context, &r)
+	return r, err
 }
