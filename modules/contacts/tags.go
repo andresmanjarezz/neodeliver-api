@@ -1,80 +1,81 @@
 package contacts
 
 import (
+	"errors"
 	"time"
 
 	"github.com/graphql-go/graphql"
 	"neodeliver.com/engine/rbac"
 	"neodeliver.com/engine/db"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/segmentio/ksuid"
+	ggraphql "neodeliver.com/engine/graphql"
 )
 
 type Tag struct {
 	ID             string `bson:"_id,omitempty" json:"id"`
-	OrganizationID string `bson:"organization_id" json:"organization_id"`
-	Name           string `bson:"name" json:"name"`
-	ContactsCount  int       `bson:"contacts_count" json:"contacts_count"`
+	OrganizationID string `bson:"organization_id"`
+	ContactsCount  int       `bson:"contacts_count"`
 	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
+	TagData		   `bson:",inline" json:",inline"`
 }
 
-type AddTag struct {
-	OrganizationID string `bson:"organization_id" json:"organization_id"`
-	Name           string `bson:"name" json:"name"`
-	ContactsCount  int    `bson:"contacts_count" json:"contacts_count"`
+type TagData struct {
+	Name			*string	`bson:"name" json:"name"`
+	Description		*string	`bson:"description" json:"description"`
+}
+
+type TagEdit struct {
+	ID		string
+	Data	TagData	`json:"data"`
 }
 
 type TagID struct {
 	ID             string `bson:"_id, omitempty"`
 }
 
-func (Mutation) AddTag(p graphql.ResolveParams, rbac rbac.RBAC, args AddTag) (*Tag, error) {
+func (Mutation) AddTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagData) (Tag, error) {
 	t := Tag{
-		Name:			args.Name,
-		OrganizationID:	args.OrganizationID,
-		ContactsCount:	args.ContactsCount,
+		ID:				"tag_" + ksuid.New().String(),
+		OrganizationID:	rbac.OrganizationID,
+		ContactsCount:	0,
 		CreatedAt:      time.Now(),
+		TagData:		args,
 	}
 
-	insertResult, err := db.Save(p.Context, &t)
-	if err != nil {
-		return nil, err
-	}
-	
-	filter := bson.M{"_id": insertResult.InsertedID}
-	_, err = db.Find(p.Context, &t, filter)
-	if err != nil {
-		return nil, err
+	sameNameCount, _ := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Name})
+	if sameNameCount >= 1 {
+		return t, errors.New("The name is already registered within your organization")
 	}
 
-	return &t, nil
+	_, err := db.Save(p.Context, &t)
+	return t, err
 }
 
-func (Mutation) UpdateTag(p graphql.ResolveParams, rbac rbac.RBAC, args Tag) (*Tag, error) {
-	t := Tag{
-		Name:			args.Name,
-		OrganizationID:	args.OrganizationID,
-		ContactsCount:	args.ContactsCount,
-		CreatedAt:		args.CreatedAt,
+func (Mutation) UpdateTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagEdit) (Tag, error) {
+	// only update the fields that were passed in params
+	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
+	if len(data) == 0 {
+		return Tag{}, errors.New("no data to update")
 	}
 	
-	objectID, _ := primitive.ObjectIDFromHex(args.ID)
-	filter := bson.M{"_id": objectID}
+	t := Tag{}
 
-	err := db.Update(p.Context, &t, filter, &t)
-	if err != nil {
-		return nil, err
+	if args.Data.Name != nil {
+		sameNameCount, _ := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Data.Name})
+		if sameNameCount >= 1 {
+			return t, errors.New("The name is duplicated within your organization")
+		}
 	}
 
-	return &t, nil
+	err := db.Update(p.Context, &t, map[string]string{
+		"_id": args.ID,
+	}, data)
+
+	return t, err
 }
 
 func (Mutation) DeleteTag(p graphql.ResolveParams, rbac rbac.RBAC, filter TagID) (bool, error) {
 	t := Tag{}
-	objectID, _ := primitive.ObjectIDFromHex(filter.ID)
-	err := db.Delete(p.Context, &t, bson.M{"_id": objectID})
-	if err != nil {
-		return false, err
-	}
+	err := db.Delete(p.Context, &t, map[string]string{"_id": filter.ID})
 	return true, err
 }
