@@ -335,6 +335,27 @@ func (a *auth0) EnrollAuthenticationMethod(ctx context.Context, userID, secret s
 	return true, nil
 }
 
+// update the user metadata
+func (a *auth0) UpdateMetaData(ctx context.Context, userID string, metaData interface{}, res interface{}) (bool, error) {
+	url := fmt.Sprintf("/api/v2/users/%v", userID)
+	_, _, err := auth.Patch(ctx, url, nil, metaData, res)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (a *auth0) EnableMFA(ctx context.Context, userID string, flag bool, res interface{}) (bool, error) {
+
+	payload := map[string]interface{}{
+		"user_metadata": map[string]interface{}{
+			"use_mfa": flag,
+		},
+	}
+
+	return a.UpdateMetaData(ctx, userID, payload, res)
+}
+
 // ----
 
 type auth0Claims struct {

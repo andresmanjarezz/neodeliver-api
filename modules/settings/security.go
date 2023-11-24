@@ -209,6 +209,12 @@ func (Mutation) EnrollAuthenticationMethod(p graphql.ResolveParams, rbac rbac.RB
 		return res, errors.New(res.ErrorDescription)
 	}
 
+	// enable useMFA metadata
+	metaDataRes := make(map[string]interface{})
+	_, err = auth.EnableMFA(p.Context, rbac.UserID, true, &metaDataRes)
+	if err != nil {
+		return res, err
+	}
 	return res, nil
 
 }
