@@ -290,6 +290,9 @@ func resultToGraphqlMap(i interface{}) interface{} {
 	if t.Kind() == reflect.Struct && t.Name() != "Time" {
 		res := map[string]interface{}{}
 		resultToGraphqlMapToMap(i, res)
+		// bs, _ := json.MarshalIndent(res, "", "  ")
+		// fmt.Println(string(bs))
+
 		return res
 	}
 
@@ -326,7 +329,9 @@ func resultToGraphqlMapToMap(i interface{}, res map[string]interface{}) {
 			continue
 		}
 
-		if f.IsZero() {
+		if k := field.Type.Kind(); k == reflect.Bool || k == reflect.String || k == reflect.Int || k == reflect.Int64 || k == reflect.Float64 {
+			res[name] = f.Interface()
+		} else if f.IsZero() {
 			res[name] = nil
 		} else {
 			res[name] = resultToGraphqlMap(f.Interface())

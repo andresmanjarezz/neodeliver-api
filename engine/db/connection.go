@@ -47,16 +47,15 @@ func Close() {
 
 // ---
 
-func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*options.FindOneOptions) (interface{}, error) {
+func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*options.FindOneOptions) error {
 	c := Client()
-	result := o
-	err := c.Collection(CollectionName(o)).FindOne(ctx, filter, opts...).Decode(&result)
-	return result, err
+	err := c.Collection(CollectionName(o)).FindOne(ctx, filter, opts...).Decode(o)
+	return err
 }
 
 func FindAll(ctx context.Context, o interface{}, filter interface{}) error {
 	c := Client()
-	
+
 	cursor, err := c.Collection(CollectionName(o)).Find(ctx, filter)
 	if err != nil {
 		return err
@@ -87,6 +86,12 @@ func Save(ctx context.Context, o interface{}) (*mongo.InsertOneResult, error) {
 	c := Client().Collection(CollectionName(o))
 	insertResult, err := c.InsertOne(ctx, o)
 	return insertResult, err
+}
+
+func Create(ctx context.Context, o interface{}) error {
+	c := Client().Collection(CollectionName(o))
+	_, err := c.InsertOne(ctx, o)
+	return err
 }
 
 func Update(ctx context.Context, o interface{}, filter interface{}, update interface{}) error {
