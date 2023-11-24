@@ -2,6 +2,7 @@ package utils
 
 import (
 	"regexp"
+	"reflect"
 
 	isolang "github.com/emvi/iso-639-1"
 )
@@ -32,4 +33,27 @@ func ValidateMongoDBQuery(query *string) bool {
 	queryRegex := `\{\s*\$[a-zA-Z]+\s*:\s*\[.*\]\s*\}`
 	match, _ := regexp.MatchString(queryRegex, *query)
 	return match
+}
+
+func FilterNilFields(obj interface{}) interface{} {
+	objValue := reflect.ValueOf(obj)
+	objType := objValue.Type()
+	
+	// Create a new instance of the same type as the input object
+	result := reflect.New(objType).Elem()
+
+	// Iterate over the fields of the object
+	for i := 0; i < objValue.NumField(); i++ {
+		fieldValue := objValue.Field(i)
+
+		// Check if the field value is nil
+		if fieldValue.IsNil() {
+			continue // Skip nil fields
+		}
+
+		// Set the field value in the result object
+		result.Field(i).Set(fieldValue)
+	}
+
+	return result.Interface()
 }

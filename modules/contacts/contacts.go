@@ -125,7 +125,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
-	args.Data = db.FilterNilFields(args.Data).(ContactData)
+	args.Data = utils.FilterNilFields(args.Data).(ContactData)
 	if err := args.Data.Validate(); err != nil {
 		return Contact{}, err
 	}
