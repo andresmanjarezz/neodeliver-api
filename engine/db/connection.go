@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"fmt"
 
 	"github.com/gertd/go-pluralize"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -96,9 +95,6 @@ func Update(ctx context.Context, o interface{}, filter interface{}, update inter
 	upsert := true
 
 	// TODO filter out nil fields
-	fmt.Println(update)
-	update = FilterNilFields(update)
-	fmt.Println(update)
 
 	res := c.FindOneAndUpdate(ctx, filter, map[string]interface{}{"$set": update}, &options.FindOneAndUpdateOptions{
 		ReturnDocument: &after,
@@ -137,7 +133,6 @@ func ToSnakeCase(str string) string {
 func FilterNilFields(obj interface{}) interface{} {
 	objValue := reflect.ValueOf(obj)
 	objType := objValue.Type()
-	fmt.Println(objValue, objType)
 	
 	// Create a new instance of the same type as the input object
 	result := reflect.New(objType).Elem()

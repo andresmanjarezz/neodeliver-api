@@ -34,28 +34,33 @@ type ContactData struct {
 	ExternalID         *string  `bson:"external_id" json:"external_id"` // used to map to external systems => unique per org
 	GivenName          *string  `bson:"given_name" json:"given_name"`
 	LastName           *string  `bson:"last_name" json:"last_name"`
-	Email              *string  `bson:"email" json:"email"`
+	Email              *string  `bson:"email, omitempty" json:"email, omitempty"`
 	NotificationTokens []string `bson:"notification_tokens" json:"notification_tokens"`
 	PhoneNumber        *string  `bson:"phone_number" json:"phone_number"`
 	Lang               *string   `bson:"lang" json:"lang"`
 }
 
 func (c ContactData) Validate() error {
-	match := utils.ValidateEmail(c.Email)
-	if !match {
-		return errors.New("Email address is not valid")
+	if c.Email != nil {
+		if !utils.ValidateEmail(c.Email) {
+			return errors.New(utils.MessageEmailInvalid)
+		}
 	}
-	match = utils.ValidatePhone(c.PhoneNumber)
-	if !match {
-		return errors.New("Phone number is not valid")
+	if c.PhoneNumber != nil {
+		if !utils.ValidatePhone(c.PhoneNumber) {
+			return errors.New(utils.MessagePhoneNumberInvalid)
+		}
 	}
-	match = utils.ValidateLanguageCode(c.Lang)
-	if !match {
-		return errors.New("Language is not valid")
+	if c.Lang != nil {
+		if !utils.ValidateLanguageCode(c.Lang) {
+			return errors.New(utils.MessageLangCodeInvalid)
+		}
 	}
-	for _, token := range c.NotificationTokens {
-		if !utils.ValidateNotificationToken(&token) {
-			return errors.New("Notification tokens include invalid token")
+	if c.NotificationTokens != nil {
+		for _, token := range c.NotificationTokens {
+			if !utils.ValidateNotificationToken(&token) {
+				return errors.New(utils.MessageNotificationTokenInvalid)
+			}
 		}
 	}
 
@@ -120,6 +125,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
+	args.Data = db.FilterNilFields(args.Data).(ContactData)
 	if err := args.Data.Validate(); err != nil {
 		return Contact{}, err
 	}
@@ -131,37 +137,45 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	}
 
 	c := Contact{}
-	duplicates := []Contact{}
-	filter := bson.M{
-		"organization_id": c.OrganizationID,
-		"$or": []bson.M{
-			{"email": *args.Data.Email},
-			{"external_id": *args.Data.ExternalID},
+	filter := bson.M{}
+	if args.Data.Email != nil && args.Data.ExternalID != nil {
+		filter = bson.M{
+			"$or": []bson.M{
+				{"email": *args.Data.Email},
+				{"external_id": *args.Data.ExternalID},
+			},
+		}
+	} else if args.Data.Email == nil && args.Data.ExternalID != nil {
+		filter = bson.M{"external_id": *args.Data.ExternalID}
+	} else if args.Data.ExternalID == nil && args.Data.Email != nil {
+		filter = bson.M{"email": *args.Data.Email}
+	}
+	duplicateFilter := bson.M{
+		"$and": []bson.M{
+			{"organization_id": rbac.OrganizationID},
+			{
+				"_id": bson.M{
+					"$not": bson.M{
+						"$eq": args.ID,
+					},
+				},
+			},
+			filter,
 		},
 	}
-	err := db.FindAll(p.Context, &duplicates, filter)
-
-	// check if updated email is registered
-	if args.Data.Email != nil {
-		numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "email": *args.Data.Email})
-		if numberOfSameEmail >= 1 {
-			return c, errors.New(utils.MessageDuplicationError)
-		}
+	numberOfDuplicates, err := db.Count(p.Context, &c, duplicateFilter)
+	if err != nil {
+		return c, errors.New(utils.MessageOtherError)
 	}
-
-	if args.Data.ExternalID != nil {
-		numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "external_id": *args.Data.ExternalID})
-		if numberOfSameID >= 1 {
-			return c, errors.New(utils.MessageDuplicationError)
-		}
+	if numberOfDuplicates >= 1 {
+		return c, errors.New(utils.MessageDuplicationError)
 	}
-
 	// Save the updated contact to the database
 	err = db.Update(p.Context, &c, map[string]string{
 		"_id": args.ID,
 	}, data)
 
-	return c, err
+	return c, nil
 }
 
 func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter ContactID) (bool, error) {
@@ -185,3 +199,4 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 	_, err := db.Save(p.Context, &r)
 	return r, err
 }
+
