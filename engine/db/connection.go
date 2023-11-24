@@ -55,6 +55,26 @@ func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*optio
 	return result, err
 }
 
+func FindAll(ctx context.Context, o interface{}, filter interface{}) error {
+	c := Client()
+	
+	cursor, err := c.Collection(CollectionName(o)).Find(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	if cursor.Next(ctx) {
+		err := cursor.Decode(o)
+		if err != nil {
+			return err
+		}
+	} else {
+		return mongo.ErrNoDocuments
+	}
+
+	return nil
+}
+
 func Count(ctx context.Context, o interface{}, filter interface{}, opts ...*options.CountOptions) (int64, error) {
 	c := Client()
 	count, err := c.Collection(CollectionName(o)).CountDocuments(ctx, filter, opts...)

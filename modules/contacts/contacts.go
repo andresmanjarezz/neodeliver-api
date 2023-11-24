@@ -10,6 +10,7 @@ import (
 	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/rbac"
 	utils "neodeliver.com/utils"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type ContactStats struct {
@@ -89,7 +90,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 	c := Contact{
 		ID:             "ctc_" + ksuid.New().String(),
 		OrganizationID: rbac.OrganizationID,
-		Status:         "ACTIVE", // Assuming a default status
+		Status:         utils.ContactStatusActive,
 		SubscribedAt:   time.Now(),
 		ContactData:    args,
 	}
@@ -98,17 +99,23 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 		return c, err
 	}
 
-	numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "email": *args.Email})
-	if numberOfSameEmail >= 1 {
-		return c, errors.New("The email is already registered within your organization")
+	filter := bson.M{
+		"organization_id": c.OrganizationID,
+		"$or": []bson.M{
+			{"email": *args.Email},
+			{"external_id": *args.ExternalID},
+		},
 	}
 
-	numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": c.OrganizationID, "external_id": *args.ExternalID})
-	if numberOfSameID >= 1 {
-		return c, errors.New("The ID is duplicated within your organization")
+	numberOfDuplicates, err := db.Count(p.Context, &c, filter)
+	if err != nil {
+		return c, errors.New(utils.MessageOtherError)
+	}
+	if numberOfDuplicates >= 1 {
+		return c, errors.New(utils.MessageDuplicationError)
 	}
 
-	_, err := db.Save(p.Context, &c)
+	_, err = db.Save(p.Context, &c)
 	return c, err
 }
 
@@ -124,23 +131,33 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	}
 
 	c := Contact{}
+	duplicates := []Contact{}
+	filter := bson.M{
+		"organization_id": c.OrganizationID,
+		"$or": []bson.M{
+			{"email": *args.Data.Email},
+			{"external_id": *args.Data.ExternalID},
+		},
+	}
+	err := db.FindAll(p.Context, &duplicates, filter)
 
+	// check if updated email is registered
 	if args.Data.Email != nil {
 		numberOfSameEmail, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "email": *args.Data.Email})
 		if numberOfSameEmail >= 1 {
-			return c, errors.New("The email is duplicated within your organization")
+			return c, errors.New(utils.MessageDuplicationError)
 		}
 	}
 
 	if args.Data.ExternalID != nil {
 		numberOfSameID, _ := db.Count(p.Context, &c, map[string]string{"organization_id": rbac.OrganizationID, "external_id": *args.Data.ExternalID})
 		if numberOfSameID >= 1 {
-			return c, errors.New("The ID is duplicated within your organization")
+			return c, errors.New(utils.MessageDuplicationError)
 		}
 	}
 
 	// Save the updated contact to the database
-	err := db.Update(p.Context, &c, map[string]string{
+	err = db.Update(p.Context, &c, map[string]string{
 		"_id": args.ID,
 	}, data)
 
