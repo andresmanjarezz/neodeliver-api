@@ -6,36 +6,63 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/functionalfoundry/graphqlws"
 	"github.com/graphql-go/graphql"
 	"neodeliver.com/engine/rbac"
 )
 
+type Payload struct {
+	Query         string                 `json:"query"`
+	Variables     map[string]interface{} `json:"variables"`
+	OperationName string                 `json:"operationName"`
+}
+
 func Route(schema graphql.Schema) http.HandlerFunc {
+	subscriptionManager := graphqlws.NewSubscriptionManager(&schema)
+
+	graphqlwsHandler := graphqlws.NewHandler(graphqlws.HandlerConfig{
+		// Wire up the GraphqL WebSocket handler with the subscription manager
+		SubscriptionManager: subscriptionManager,
+
+		// Optional: Add a hook to resolve auth tokens into users that are
+		// then stored on the GraphQL WS connections
+		Authenticate: func(authToken string) (interface{}, error) {
+			// This is just a dumb example
+			return "Joe", nil
+		},
+	})
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		payload := struct {
-			Query         string                 `json:"query"`
-			Variables     map[string]interface{} `json:"variables"`
-			OperationName string                 `json:"operationName"`
-		}{}
-
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && err != io.EOF {
-			http.Error(w, err.Error(), 400)
-		} else if payload.Query == "" && r.Method == "GET" {
-			bs := ServePlayground()
-			w.Header().Set("Content-Type", "text/html")
-			w.Write(bs)
-			return
-		} else if payload.Query == "" {
-			http.Error(w, "no query provided", 400)
-			return
-		}
-
 		ctx := r.Context()
+		ctx = context.WithValue(ctx, "client_ip", "::1") // TODO set client ip
 		ctx = context.WithValue(ctx, "rbac", func() (rbac.RBAC, error) {
 			return rbac.Load(r)
 		})
 
-		ctx = context.WithValue(ctx, "client_ip", "::1") // TODO set client ip
+		// websocket
+		if r.Header.Get("connection") == "Upgrade" && r.Header.Get("upgrade") == "websocket" {
+			graphqlwsHandler.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// playground
+		if r.Method == "GET" {
+			bs := ServePlayground()
+			w.Header().Set("Content-Type", "text/html")
+			w.Write(bs)
+			return
+		}
+
+		// ---
+
+		payload := Payload{}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && err != io.EOF {
+			http.Error(w, err.Error(), 400)
+		} else if payload.Query == "" {
+			http.Error(w, "no query provided", 400)
+			return
+		}
 
 		result := graphql.Do(graphql.Params{
 			Schema:         schema,

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gertd/go-pluralize"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -111,6 +112,12 @@ func Update(ctx context.Context, o interface{}, filter interface{}, update inter
 	}
 
 	return res.Decode(o)
+}
+
+func UpdateOne(ctx context.Context, o interface{}, filter interface{}, update interface{}) error {
+	c := Client().Collection(CollectionName(o))
+	_, err := c.UpdateOne(ctx, filter, bson.M{"$set": update})
+	return err
 }
 
 func Delete(ctx context.Context, o interface{}, filter interface{}) error {

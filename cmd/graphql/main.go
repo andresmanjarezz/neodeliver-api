@@ -18,7 +18,8 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting graphql server...")
+	log15.Root().SetHandler(log15.LvlFilterHandler(log15.LvlDebug, log15.StreamHandler(os.Stderr, log15.TerminalFormat())))
+	log15.Info("Starting graphql server...")
 
 	godotenv.Overload()
 	defer db.Close()
@@ -47,7 +48,7 @@ func httpServer(s gographql.Schema) {
 		port = "8080"
 	}
 
-	fmt.Println("Listening on port " + port + "...")
+	log15.Info("Listening http server", "port", port)
 	http.HandleFunc("/", graphql.Route(s))
 	http.ListenAndServe(":"+port, nil)
 }

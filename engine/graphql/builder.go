@@ -8,9 +8,10 @@ import (
 )
 
 type Builder struct {
-	query    graphql.Fields
-	mutation graphql.Fields
-	builder  *TypesBuilder
+	query        graphql.Fields
+	mutation     graphql.Fields
+	subscription graphql.Fields
+	builder      *TypesBuilder
 }
 
 func New() *Builder {
@@ -33,6 +34,22 @@ func (g *Builder) AddQueryMethods(o interface{}) {
 			}
 
 			g.query[k] = v
+		}
+	}
+}
+
+func (g *Builder) AddSubscriptionMethods(o interface{}) {
+	queryFields := g.builder.ExtractFields(reflect.ValueOf(o), nil)
+
+	if g.subscription == nil {
+		g.subscription = queryFields
+	} else {
+		for k, v := range queryFields {
+			if _, ok := g.subscription[k]; ok {
+				panic("duplicate subscription method: " + k)
+			}
+
+			g.subscription[k] = v
 		}
 	}
 }
@@ -136,7 +153,6 @@ func (g *Builder) MongoQuery(o interface{}) *QueryParams {
 func (g *Builder) Build() (graphql.Schema, error) {
 
 	schemaConfig := graphql.SchemaConfig{
-		// Subscription *Object
 		// Directives   []*Directive
 		// Extensions   []Extension
 		Types: g.builder.GetTypes(),
@@ -148,6 +164,10 @@ func (g *Builder) Build() (graphql.Schema, error) {
 
 	if g.mutation != nil {
 		schemaConfig.Mutation = graphql.NewObject(graphql.ObjectConfig{Name: "RootMutation", Fields: g.mutation})
+	}
+
+	if g.subscription != nil {
+		schemaConfig.Subscription = graphql.NewObject(graphql.ObjectConfig{Name: "RootSubscription", Fields: g.subscription})
 	}
 
 	return graphql.NewSchema(schemaConfig)
