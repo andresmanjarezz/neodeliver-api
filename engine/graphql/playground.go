@@ -72,6 +72,7 @@ func Route(schema graphql.Schema) http.HandlerFunc {
 			Context:        ctx,
 		})
 
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
 	}
 }

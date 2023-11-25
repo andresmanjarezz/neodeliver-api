@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	parser "net/url"
 	"os"
 	"strings"
 	"time"
+
+	parser "net/url"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
@@ -77,7 +78,7 @@ func (a *auth0) getToken(ctx context.Context) (string, error) {
 		a.audience = fmt.Sprintf("https://%s/api/v2/", a.tenant)
 	}
 
-	_, _, err := a.Request(ctx, "POST", "/oauth/token", map[string]interface{}{
+	_, _, err := a.Request(ctx, "POST", "/oauth/token", nil, map[string]interface{}{
 		"grant_type":    "client_credentials",
 		"client_id":     a.clientID,
 		"client_secret": a.clientSecret,
@@ -102,7 +103,7 @@ func (a *auth0) getToken(ctx context.Context) (string, error) {
 		mp["AUTH0_TOKEN"] = res.Token
 		godotenv.Write(mp, ".env")
 	}
-
+	fmt.Println("here====")
 	return res.Token, nil
 }
 
@@ -115,7 +116,7 @@ func (a *auth0) updateTokenExpiration() error {
 	return err
 }
 
-func (a *auth0) Request(ctx context.Context, method string, url string, body interface{}, res interface{}) ([]byte, int, error) {
+func (a *auth0) Request(ctx context.Context, method string, url string, headers map[string]string, body interface{}, res interface{}) ([]byte, int, error) {
 	if a.tenant == "" {
 		return nil, 401, errors.New("auth0 tenant is not set. Please set the AUTH0_TENANT environment variable")
 	}
@@ -142,13 +143,17 @@ func (a *auth0) Request(ctx context.Context, method string, url string, body int
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-
+	for k, v := range headers {
+		req.Header.Add(k, v)
+	}
 	rawURL, err := parser.Parse(url)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	if rawURL.Path != "/oauth/token" {
+	// if the header does not have Authorization key and url is not /oauth/token,  gets the management token
+	_, ok := headers["Authorization"]
+	if rawURL.Path != "/oauth/token" && !ok {
 		token, err := a.getToken(ctx)
 		if err != nil {
 			return nil, 401, err
@@ -158,11 +163,10 @@ func (a *auth0) Request(ctx context.Context, method string, url string, body int
 
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
-
 	// Send the HTTP request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, resp.StatusCode, err
+		return nil, http.StatusInternalServerError, err
 	}
 
 	defer resp.Body.Close()
@@ -176,16 +180,16 @@ func (a *auth0) Request(ctx context.Context, method string, url string, body int
 	return responseBody, resp.StatusCode, json.Unmarshal(responseBody, res)
 }
 
-func (a *auth0) Post(ctx context.Context, url string, body interface{}, res interface{}) ([]byte, int, error) {
-	return a.Request(ctx, "POST", url, body, res)
+func (a *auth0) Post(ctx context.Context, url string, headers map[string]string, body interface{}, res interface{}) ([]byte, int, error) {
+	return a.Request(ctx, "POST", url, headers, body, res)
 }
 
-func (a *auth0) Patch(ctx context.Context, url string, body interface{}, res interface{}) ([]byte, int, error) {
-	return a.Request(ctx, "PATCH", url, body, res)
+func (a *auth0) Patch(ctx context.Context, url string, headers map[string]string, body interface{}, res interface{}) ([]byte, int, error) {
+	return a.Request(ctx, "PATCH", url, headers, body, res)
 }
 
-func (a *auth0) Get(ctx context.Context, url string, res interface{}) ([]byte, int, error) {
-	return a.Request(ctx, "GET", url, nil, res)
+func (a *auth0) Get(ctx context.Context, url string, headers map[string]string, res interface{}) ([]byte, int, error) {
+	return a.Request(ctx, "GET", url, headers, nil, res)
 }
 
 // ----
@@ -198,10 +202,12 @@ func (a *auth0) VerifyPassword(ctx context.Context, user_id string, password str
 	}
 
 	res := struct {
-		Error       string
-		AccessToken string `json:"access_token"`
-		Email       string
-		Identities  []struct {
+		Error            string
+		ErrorDescription string `json:"error_description"`
+		MFAToken         string `json:"mfa_token"`
+		AccessToken      string `json:"access_token"`
+		Email            string
+		Identities       []struct {
 			UserID     string `json:"user_id"`
 			Provider   string `json:"provider"`
 			Connection string `json:"connection"`
@@ -209,7 +215,7 @@ func (a *auth0) VerifyPassword(ctx context.Context, user_id string, password str
 	}{}
 
 	// find username & connection
-	_, _, err := a.Get(ctx, "/api/v2/users/"+user_id, &res)
+	_, _, err := a.Get(ctx, "/api/v2/users/"+user_id, nil, &res)
 	if err != nil {
 		return false, "", err
 	} else if res.Error != "" {
@@ -231,7 +237,7 @@ func (a *auth0) VerifyPassword(ctx context.Context, user_id string, password str
 	}
 
 	// verify password
-	_, _, err = a.Post(ctx, "/oauth/token", map[string]interface{}{
+	_, _, err = a.Post(ctx, "/oauth/token", nil, map[string]interface{}{
 		"grant_type":    "password",
 		"client_id":     a.passClientID,
 		"client_secret": a.passClientSecret,
@@ -243,11 +249,90 @@ func (a *auth0) VerifyPassword(ctx context.Context, user_id string, password str
 
 	if err != nil {
 		return false, connection, err
-	} else if res.Error != "" && res.Error != "invalid_grant" {
+	}
+
+	// check the error is mfa_required
+	if res.Error != "" && res.Error == "mfa_required" {
+		// TODO : Implement the otp verification and get the token
+		// unset the error and error description
+		// res.Error = ""
+		// res.ErrorDescription = ""
+
+		// // verify the MFA and get back the token
+		// _, err := a.VerifyMFA(ctx, res.MFAToken, "", "otp", &res)
+		// if err != nil {
+		// 	return false, connection, err
+		// }
+
+		return true, connection, nil
+	}
+
+	if res.Error != "" && res.Error != "invalid_grant" {
 		return false, connection, errors.New(res.Error)
 	}
 
 	return res.AccessToken != "", connection, nil
+}
+
+// Verify user mfa
+func (a *auth0) VerifyMFA(ctx context.Context, token, verificationCode, method string, res interface{}) (bool, error) {
+	var payload = map[string]interface{}{
+		"client_id":     a.passClientID,
+		"client_secret": a.passClientSecret,
+		"mfa_token":     token,
+	}
+
+	switch method {
+	case "otp":
+		payload["grant_type"] = "http://auth0.com/oauth/grant-type/mfa-otp"
+		payload["otp"] = verificationCode
+	default:
+		return false, errors.New("invalid mfa method")
+	}
+
+	_, _, err := a.Post(ctx, "/oauth/token", nil, payload, &res)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// Enroll user for MFA
+func (a *auth0) EnrollMFA(ctx context.Context, types []string, token, method string, res interface{}) (bool, error) {
+	headers := map[string]string{
+		"Authorization": fmt.Sprintf("Bearer %v", token),
+	}
+	payload := map[string]interface{}{
+		"authenticator_types": types,
+	}
+	_, _, err := auth.Post(ctx, "/mfa/associate", headers, payload, &res)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// Confirm MFA enrollment
+func (a *auth0) ConfirmMFAEnrollment(ctx context.Context, token, verificationCode, method string, res interface{}) (bool, error) {
+	return a.VerifyMFA(ctx, token, verificationCode, method, res)
+}
+
+// Set enrollment authentication method
+func (a *auth0) EnrollAuthenticationMethod(ctx context.Context, userID, secret string, res interface{}) (bool, error) {
+
+	payload := map[string]interface{}{
+		"type":        "totp",
+		"name":        "TOTP",
+		"totp_secret": secret, // should be a base32 encoded secret
+	}
+	url := fmt.Sprintf("/api/v2/users/%v/authentication-methods", userID)
+	_, _, err := auth.Post(ctx, url, nil, payload, res)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ----

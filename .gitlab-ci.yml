@@ -1,0 +1,12 @@
+image: google/cloud-sdk:alpine
+
+stages:
+  - deploy
+
+staging:
+  stage: deploy
+  script:
+    - gcloud functions deploy graphql --gen2 --runtime=go121 --region=europe-west1 --source=. --entry-point GraphQL --trigger-http --allow-unauthenticated
+  environment: main
+  only:
+    - main

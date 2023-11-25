@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
+	"neodeliver.com/engine/graphql"
+	"neodeliver.com/modules"
 )
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		io.WriteString(w, "Hello")
-	})
+	instance := modules.Build()
+	http.HandleFunc("/", graphql.Route(instance))
 
 	if runtime_api, _ := os.LookupEnv("AWS_LAMBDA_RUNTIME_API"); runtime_api != "" {
 		fmt.Println("Starting up in Lambda Runtime")
