@@ -116,7 +116,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 
 	numberOfDuplicates, err := db.Count(p.Context, &c, filter)
 	if err != nil {
-		return c, errors.New(utils.MessageOtherError)
+		return c, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
 		return c, errors.New(utils.MessageDuplicationError)
@@ -167,7 +167,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	}
 	numberOfDuplicates, err := db.Count(p.Context, &c, duplicateFilter)
 	if err != nil {
-		return c, errors.New(utils.MessageOtherError)
+		return c, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
 		return c, errors.New(utils.MessageDuplicationError)
@@ -191,6 +191,9 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 	err := db.Find(p.Context, &c, map[string]string{
 		"_id": args.ContactID,
 	})
+	if err != nil {
+		return c, errors.New(utils.MessageCannotFindContactError)
+	}
 
 	count := 0
 	for _, tagID := range c.Tags {
@@ -203,9 +206,13 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 	}
 
 	c.Tags = append(c.Tags, args.TagID)
-	db.Update(p.Context, &c, map[string]string{
+	err = db.Update(p.Context, &c, map[string]string{
 		"_id": args.ContactID,
 	}, c)
+	if err != nil {
+		return c, errors.New(utils.MessageCannotAssignTagError)
+	}
+
 	return c, err
 }
 

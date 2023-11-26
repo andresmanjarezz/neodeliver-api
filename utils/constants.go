@@ -13,5 +13,7 @@ const (
 
 	MessageDuplicationError			string = "The ID or email address is already registered within your organization."
 	MessageTagDuplicationError		string = "This tag is already assigned to this contact."
-	MessageOtherError				string = "Internal error occured."
+	MessageCannotFindContactError	string = "Cannot find the contact."
+	MessageCannotAssignTagError		string = "Cannot assign tag to this contact."
+	MessageDefaultError				string = "Internal error occured."
 )
