@@ -195,6 +195,14 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		return c, errors.New(utils.MessageContactCannotFindError)
 	}
 
+	t := Tag{}
+	err = db.Find(p.Context, &t, map[string]string{
+		"_id": args.TagID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotFindError)
+	}
+
 	count := 0
 	for _, tagID := range c.Tags {
 		if tagID == args.TagID {
@@ -223,6 +231,14 @@ func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAss
 	})
 	if err != nil {
 		return c, errors.New(utils.MessageContactCannotFindError)
+	}
+
+	t := Tag{}
+	err = db.Find(p.Context, &t, map[string]string{
+		"_id": args.TagID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotFindError)
 	}
 
 	updateTags := make([]string, 0)

@@ -16,5 +16,6 @@ const (
 	MessageTagDuplicationError		string = "This tag is already assigned to this contact."
 	MessageTagNotAssignedError		string = "This tag is not assigned to this contact."
 	MessageTagCannotAssignError		string = "Cannot assign tag to this contact."
+	MessageTagCannotFindError		string = "Cannot find the tag."
 	MessageDefaultError				string = "Internal error occured."
 )
