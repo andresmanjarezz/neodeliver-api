@@ -192,7 +192,7 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		"_id": args.ContactID,
 	})
 	if err != nil {
-		return c, errors.New(utils.MessageCannotFindContactError)
+		return c, errors.New(utils.MessageContactCannotFindError)
 	}
 
 	count := 0
@@ -210,9 +210,38 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		"_id": args.ContactID,
 	}, c)
 	if err != nil {
-		return c, errors.New(utils.MessageCannotAssignTagError)
+		return c, errors.New(utils.MessageTagCannotAssignError)
 	}
 
 	return c, err
 }
 
+func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
+	c := Contact{}
+	err := db.Find(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageContactCannotFindError)
+	}
+
+	updateTags := make([]string, 0)
+	for _, tagID := range c.Tags {
+		if tagID != args.TagID {
+			updateTags = append(updateTags, tagID)
+		}
+	}
+	if len(updateTags) == len(c.Tags) {
+		return c, errors.New(utils.MessageTagNotAssignedError)
+	}
+
+	c.Tags = updateTags
+	err = db.Update(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	}, c)
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotAssignError)
+	}
+
+	return c, err
+}

@@ -12,8 +12,9 @@ const (
 	MessageNotificationTokenInvalid	string = "The notification token is not valid."
 
 	MessageDuplicationError			string = "The ID or email address is already registered within your organization."
+	MessageContactCannotFindError	string = "Cannot find the contact."
 	MessageTagDuplicationError		string = "This tag is already assigned to this contact."
-	MessageCannotFindContactError	string = "Cannot find the contact."
-	MessageCannotAssignTagError		string = "Cannot assign tag to this contact."
+	MessageTagNotAssignedError		string = "This tag is not assigned to this contact."
+	MessageTagCannotAssignError		string = "Cannot assign tag to this contact."
 	MessageDefaultError				string = "Internal error occured."
 )
