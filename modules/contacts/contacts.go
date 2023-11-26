@@ -75,6 +75,7 @@ type Contact struct {
 	Status         string    `bson:"status" json:"status"`
 	SubscribedAt   time.Time `bson:"subscribed_at" json:"subscribed_at"`
 	ContactData    `bson:",inline" json:",inline"`
+	Tags	   	   []string	 `bson:"tags"`
 }
 
 type ContactID struct {
@@ -98,6 +99,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 		Status:         utils.ContactStatusActive,
 		SubscribedAt:   time.Now(),
 		ContactData:    args,
+		Tags:			make([]string, 0),
 	}
 
 	if err := c.Validate(); err != nil {
@@ -184,19 +186,26 @@ func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter Co
 	return true, err
 }
 
-type ContactTag struct {
-	ID			string	`bson:"_id"`
-	ContactID	string	`bson:"contact_id" json:"contact_id"`
-	TagID		string	`bson:"tag_id" json:"tag_id"`
-}
+func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
+	c := Contact{}
+	err := db.Find(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	})
 
-func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (ContactTag, error) {
-	r := ContactTag{
-		ID:			"ctc_tag_" + ksuid.New().String(),
-		ContactID:	args.ContactID,
-		TagID:		args.TagID,
+	count := 0
+	for _, tagID := range c.Tags {
+		if tagID == args.TagID {
+			count ++
+		}
 	}
-	_, err := db.Save(p.Context, &r)
-	return r, err
+	if count != 0 {
+		return c, errors.New(utils.MessageTagDuplicationError)
+	}
+
+	c.Tags = append(c.Tags, args.TagID)
+	db.Update(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	}, c)
+	return c, err
 }
 

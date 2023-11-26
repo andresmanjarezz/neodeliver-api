@@ -12,5 +12,6 @@ const (
 	MessageNotificationTokenInvalid	string = "The notification token is not valid."
 
 	MessageDuplicationError			string = "The ID or email address is already registered within your organization."
+	MessageTagDuplicationError		string = "This tag is already assigned to this contact."
 	MessageOtherError				string = "Internal error occured."
 )
