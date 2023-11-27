@@ -3,6 +3,7 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/graphql-go/graphql"
 	"neodeliver.com/engine/rbac"
@@ -85,6 +86,71 @@ func (Query) ListMFA(p graphql.ResolveParams, rbac rbac.RBAC) ([]Auth0Method, er
 	_, _, err := auth.Get(p.Context, url, nil, &res)
 	if err != nil {
 		return nil, err
+	}
+
+	return res, nil
+}
+
+type SocialConnection struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Strategy string `json:"strategy"`
+}
+
+// ListSocialConnections
+// lists available social login options for user
+func (Query) ListSocialConnections(p graphql.ResolveParams) ([]SocialConnection, error) {
+
+	auth := Auth0()
+	res := []struct {
+		SocialConnection
+		EnabledClients []string `json:"enabled_clients"`
+	}{}
+
+	_, _, err := auth.Get(p.Context, "/api/v2/connections", nil, &res)
+	if err != nil {
+		return nil, fmt.Errorf("inernal_error")
+	}
+
+	var out []SocialConnection
+	for _, conn := range res {
+		if slices.Contains(conn.EnabledClients, auth.clientID) {
+			out = append(out, conn.SocialConnection)
+		}
+	}
+
+	return out, nil
+
+}
+
+type UserInfo struct {
+	Error            string
+	ErrorDescription string `json:"error_description"`
+	Email            string
+	Identities       []Identity
+}
+
+type Identity struct {
+	UserID     string `json:"user_id"`
+	Provider   string `json:"provider"`
+	Connection string `json:"connection"`
+}
+
+// FetchUser
+// fetches user information from auth0
+func (Query) FetchUser(p graphql.ResolveParams, rbac rbac.RBAC) (UserInfo, error) {
+
+	auth := Auth0()
+	var res UserInfo
+
+	url := fmt.Sprintf("/api/v2/users/%s", rbac.UserID)
+	_, _, err := auth.Get(p.Context, url, nil, &res)
+	if err != nil {
+		return res, errors.New("internal error")
+	}
+
+	if res.ErrorDescription != "" {
+		return res, errors.New(res.ErrorDescription)
 	}
 
 	return res, nil
@@ -210,5 +276,61 @@ func (Mutation) EnrollAuthenticationMethod(p graphql.ResolveParams, rbac rbac.RB
 	}
 
 	return res, nil
+
+}
+
+type LinkAccount struct {
+	Provider     *string
+	ConnectionID *string
+	UserID       *string
+	LinkWith     *string
+}
+
+// LinkUserAccount
+// links a new account to the user's primary account
+func (Mutation) LinkUserAccount(p graphql.ResolveParams, rbac rbac.RBAC, args LinkAccount) (bool, error) {
+
+	auth := Auth0()
+	var res interface{}
+	_, err := auth.LinkAccount(p.Context, rbac, args, &res)
+	if err != nil {
+		return false, err
+	}
+
+	switch v := res.(type) {
+	case []interface{}:
+	case map[string]interface{}:
+		if _, ok := v["error"]; ok {
+			return false, errors.New(v["message"].(string))
+		}
+	}
+
+	return true, nil
+}
+
+type UnlinkAccount struct {
+	SecondaryUserID string
+	Provider        string
+}
+
+// UnlinkUserAccount
+// unlinks a user account from the primary account
+func (Mutation) UnlinkUserAccount(p graphql.ResolveParams, rbac rbac.RBAC, args UnlinkAccount) (bool, error) {
+
+	auth := Auth0()
+	var res interface{}
+	_, err := auth.UnlinkAccount(p.Context, args.Provider, rbac.UserID, args.SecondaryUserID, &res)
+	if err != nil {
+		return false, err
+	}
+	switch v := res.(type) {
+	case []interface{}:
+	case map[string]interface{}:
+		if _, ok := v["error"]; ok {
+			return false, errors.New(v["message"].(string))
+		}
+	}
+
+	return true, nil
 
 }
