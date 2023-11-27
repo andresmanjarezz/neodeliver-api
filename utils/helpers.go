@@ -3,8 +3,10 @@ package utils
 import (
 	"regexp"
 	"reflect"
+	"strings"
 
 	isolang "github.com/emvi/iso-639-1"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func ValidateEmail(email *string) bool {
@@ -29,10 +31,33 @@ func ValidateNotificationToken(token *string) bool {
 	return match
 }
 
-func ValidateMongoDBQuery(query *string) bool {
-	queryRegex := `\{\s*\$[a-zA-Z]+\s*:\s*\[.*\]\s*\}`
-	match, _ := regexp.MatchString(queryRegex, *query)
-	return match
+func ConvertQueryToBSON(query string) (bson.M, error) {
+	bsonMap := bson.M{}
+	err := bson.UnmarshalExtJSON([]byte(query), true, &bsonMap)
+	if err != nil {
+		return nil, err
+	}
+	return bsonMap, nil
+}
+
+func GetQueryBSONDepth(obj bson.M) int {
+	maxDepth := 0
+
+	for _, value := range obj {
+		if subObj, ok := value.(bson.M); ok {
+			depth := GetQueryBSONDepth(subObj)
+			if depth > maxDepth {
+				maxDepth = depth
+			}
+		}
+	}
+
+	return maxDepth + 1
+}
+
+func RemoveSpaces(str *string) {
+	*str = strings.ReplaceAll(*str, " ", "")
+	*str = strings.ReplaceAll(*str, "\t", "")
 }
 
 func FilterNilFields(obj interface{}) interface{} {

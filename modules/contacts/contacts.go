@@ -75,6 +75,7 @@ type Contact struct {
 	Status         string    `bson:"status" json:"status"`
 	SubscribedAt   time.Time `bson:"subscribed_at" json:"subscribed_at"`
 	ContactData    `bson:",inline" json:",inline"`
+	Tags	   	   []string	 `bson:"tags"`
 }
 
 type ContactID struct {
@@ -98,6 +99,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 		Status:         utils.ContactStatusActive,
 		SubscribedAt:   time.Now(),
 		ContactData:    args,
+		Tags:			make([]string, 0),
 	}
 
 	if err := c.Validate(); err != nil {
@@ -114,14 +116,18 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 
 	numberOfDuplicates, err := db.Count(p.Context, &c, filter)
 	if err != nil {
-		return c, errors.New(utils.MessageOtherError)
+		return c, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
 		return c, errors.New(utils.MessageDuplicationError)
 	}
 
 	_, err = db.Save(p.Context, &c)
-	return c, err
+	if err != nil {
+		return c, errors.New(utils.MessageDefaultError)
+	}
+
+	return c, nil
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
@@ -133,7 +139,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	// only update the fields that were passed in params
 	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
 	if len(data) == 0 {
-		return Contact{}, errors.New("no data to update")
+		return Contact{}, errors.New(utils.MessageNoUpdateError)
 	}
 
 	c := Contact{}
@@ -165,7 +171,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	}
 	numberOfDuplicates, err := db.Count(p.Context, &c, duplicateFilter)
 	if err != nil {
-		return c, errors.New(utils.MessageOtherError)
+		return c, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
 		return c, errors.New(utils.MessageDuplicationError)
@@ -184,19 +190,78 @@ func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter Co
 	return true, err
 }
 
-type ContactTag struct {
-	ID			string	`bson:"_id"`
-	ContactID	string	`bson:"contact_id" json:"contact_id"`
-	TagID		string	`bson:"tag_id" json:"tag_id"`
-}
-
-func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (ContactTag, error) {
-	r := ContactTag{
-		ID:			"ctc_tag_" + ksuid.New().String(),
-		ContactID:	args.ContactID,
-		TagID:		args.TagID,
+func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
+	c := Contact{}
+	err := db.Find(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageContactCannotFindError)
 	}
-	_, err := db.Save(p.Context, &r)
-	return r, err
+
+	t := Tag{}
+	err = db.Find(p.Context, &t, map[string]string{
+		"_id": args.TagID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotFindError)
+	}
+
+	count := 0
+	for _, tagID := range c.Tags {
+		if tagID == args.TagID {
+			count ++
+		}
+	}
+	if count != 0 {
+		return c, errors.New(utils.MessageTagAssignDuplicationError)
+	}
+
+	c.Tags = append(c.Tags, args.TagID)
+	err = db.Update(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	}, c)
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotAssignError)
+	}
+
+	return c, err
 }
 
+func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
+	c := Contact{}
+	err := db.Find(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageContactCannotFindError)
+	}
+
+	t := Tag{}
+	err = db.Find(p.Context, &t, map[string]string{
+		"_id": args.TagID,
+	})
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotFindError)
+	}
+
+	updateTags := make([]string, 0)
+	for _, tagID := range c.Tags {
+		if tagID != args.TagID {
+			updateTags = append(updateTags, tagID)
+		}
+	}
+	if len(updateTags) == len(c.Tags) {
+		return c, errors.New(utils.MessageTagNotAssignedError)
+	}
+
+	c.Tags = updateTags
+	err = db.Update(p.Context, &c, map[string]string{
+		"_id": args.ContactID,
+	}, c)
+	if err != nil {
+		return c, errors.New(utils.MessageTagCannotAssignError)
+	}
+
+	return c, err
+}

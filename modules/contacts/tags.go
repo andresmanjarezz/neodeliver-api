@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"github.com/graphql-go/graphql"
+	"go.mongodb.org/mongo-driver/bson"
 	"neodeliver.com/engine/rbac"
 	"neodeliver.com/engine/db"
 	"github.com/segmentio/ksuid"
 	ggraphql "neodeliver.com/engine/graphql"
+	utils "neodeliver.com/utils"
 )
 
 type Tag struct {
@@ -42,40 +44,66 @@ func (Mutation) AddTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagData) (T
 		TagData:		args,
 	}
 
-	sameNameCount, _ := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Name})
-	if sameNameCount >= 1 {
-		return t, errors.New("The name is already registered within your organization")
+	numberOfDuplicates, _ := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Name})
+	if numberOfDuplicates >= 1 {
+		return t, errors.New(utils.MessageTagNameDuplicationError)
 	}
 
 	_, err := db.Save(p.Context, &t)
-	return t, err
+	if err != nil {
+		return t, errors.New(utils.MessageDefaultError)
+
+	}
+	return t, nil
 }
 
 func (Mutation) UpdateTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagEdit) (Tag, error) {
 	// only update the fields that were passed in params
 	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
 	if len(data) == 0 {
-		return Tag{}, errors.New("no data to update")
+		return Tag{}, errors.New(utils.MessageNoUpdateError)
 	}
 	
 	t := Tag{}
 
+	filter := bson.M{
+		"$and": []bson.M{
+			{"organization_id": rbac.OrganizationID},
+			{
+				"_id": bson.M{
+					"$not": bson.M{
+						"$eq": args.ID,
+					},
+				},
+			},
+			{"name": *args.Data.Name},
+		},
+	}
 	if args.Data.Name != nil {
-		sameNameCount, _ := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Data.Name})
+		sameNameCount, err := db.Count(p.Context, &t, filter)
+		if err != nil {
+			return t, errors.New(utils.MessageDefaultError)
+		}
 		if sameNameCount >= 1 {
-			return t, errors.New("The name is duplicated within your organization")
+			return t, errors.New(utils.MessageTagNameDuplicationError)
 		}
 	}
 
 	err := db.Update(p.Context, &t, map[string]string{
 		"_id": args.ID,
 	}, data)
+	if err != nil {
+		return t, errors.New(utils.MessageDefaultError)
+	}
 
-	return t, err
+	return t, nil
 }
 
 func (Mutation) DeleteTag(p graphql.ResolveParams, rbac rbac.RBAC, filter TagID) (bool, error) {
 	t := Tag{}
 	err := db.Delete(p.Context, &t, map[string]string{"_id": filter.ID})
-	return true, err
+	if err != nil {
+		return false, errors.New(utils.MessageTagCannotFindError)
+	}
+	return true, nil
 }
