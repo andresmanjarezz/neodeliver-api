@@ -56,6 +56,16 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 		return s, err
 	}
 
+	numberOfDuplicates, err := db.Count(p.Context, &s, map[string]string{
+		"name": *args.Name,
+	})
+	if err != nil {
+		return s, errors.New(utils.MessageDefaultError)
+	}
+	if numberOfDuplicates >= 1 {
+		return s, errors.New(utils.MessageSegmentNameDuplicationError)
+	}
+
 	bsonObj, err := utils.ConvertQueryToBSON(*args.Filters)
 	if err != nil {
 		return s, err
@@ -66,8 +76,11 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 	}
 
 	_, err = db.Save(p.Context, &s)
+	if err != nil {
+		return s, errors.New(utils.MessageDefaultError)
+	}
 
-	return s, err
+	return s, nil
 }
 
 type SegmentEdit struct {
@@ -82,7 +95,7 @@ func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 	// only update the fields that were passed in params
 	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
 	if len(data) == 0 {
-		return Segment{}, errors.New("no data to update")
+		return Segment{}, errors.New(utils.MessageNoUpdateError)
 	}
 
 	s := Segment{}
@@ -90,8 +103,11 @@ func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 	err := db.Update(p.Context, &s, map[string]string{
 		"_id": args.ID,
 	}, data)
+	if err != nil {
+		return s, errors.New(utils.MessageDefaultError)
+	}
 
-	return s, err
+	return s, nil
 }
 
 func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter SegmentID) (bool, error) {

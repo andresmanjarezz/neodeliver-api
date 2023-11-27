@@ -123,7 +123,11 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 	}
 
 	_, err = db.Save(p.Context, &c)
-	return c, err
+	if err != nil {
+		return c, errors.New(utils.MessageDefaultError)
+	}
+
+	return c, nil
 }
 
 func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactEdit) (Contact, error) {
@@ -135,7 +139,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	// only update the fields that were passed in params
 	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
 	if len(data) == 0 {
-		return Contact{}, errors.New("no data to update")
+		return Contact{}, errors.New(utils.MessageNoUpdateError)
 	}
 
 	c := Contact{}

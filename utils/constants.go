@@ -21,9 +21,10 @@ const (
 	MessageTagCannotAssignError		string = "Cannot assign tag to this contact."
 	MessageTagCannotFindError		string = "Cannot find the tag."
 
-	MessageSegmentNameDuplicationError	string = "This segment is already registered within your organization."
+	MessageSegmentNameDuplicationError	string = "This segment name is already registered."
 	MessageSegmentCannotFindError	string = "Cannot find the segment."
 	MessageSegmentQueryDepthExceedError	string = "The maximum depth of the query is 4."
 
+	MessageNoUpdateError			string = "There is no data to update."
 	MessageDefaultError				string = "Internal error occured."
 )
