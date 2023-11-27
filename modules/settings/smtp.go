@@ -2,11 +2,17 @@ package settings
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,14 +41,6 @@ type SMTP struct {
 	UpdatedAt       time.Time `json:"updated_at" bson:"updated_at"`
 }
 
-func (s SMTP) Default(organization_id string) SMTP {
-	return SMTP{
-		OrganizationID:  organization_id,
-		TlsOnly:         true,
-		AllowSelfSigned: false,
-	}
-}
-
 func (s *SMTP) Save(ctx context.Context) error {
 	oldToken := s.UpdateToken
 	s.UpdateToken = ksuid.New().String()
@@ -60,7 +58,12 @@ func GetSMTPSettings(ctx context.Context, organization_id string) (SMTP, error) 
 	err := db.Find(ctx, &s, bson.M{"_id": organization_id})
 
 	if err == mongo.ErrNoDocuments {
-		s = s.Default(organization_id)
+		s = SMTP{
+			OrganizationID:  organization_id,
+			TlsOnly:         true,
+			AllowSelfSigned: false,
+		}
+
 		err = nil
 	}
 
@@ -70,10 +73,12 @@ func GetSMTPSettings(ctx context.Context, organization_id string) (SMTP, error) 
 // ---
 
 type SMTPDomainRecord struct {
-	Type     string
-	Host     string
-	Value    string
-	Verified bool
+	Type       string
+	Host       string
+	Value      string
+	AltValue   string `bson:"alt_value,omitempty"` // if host has already an existing record & we are extending it
+	Verified   bool
+	VerifiedAt time.Time `bson:"verified_at" graphql:"-"`
 }
 
 func (s *SMTPDomainRecord) Verify(ctx context.Context) error {
@@ -82,6 +87,7 @@ func (s *SMTPDomainRecord) Verify(ctx context.Context) error {
 	}
 
 	s.Verified = false
+	s.VerifiedAt = time.Now()
 	if s.Type != "TXT" {
 		return errors.New("invalid_record_type")
 	}
@@ -98,9 +104,83 @@ func (s *SMTPDomainRecord) Verify(ctx context.Context) error {
 			s.Verified = true
 			return nil
 		}
+
+		if strings.HasPrefix(v, "v=spf1") && strings.HasPrefix(s.Value, "v=spf1") {
+			return s.VerifySPF(v)
+		} else if strings.HasPrefix(v, "v=DMARC1; ") && strings.HasPrefix(s.Value, "v=DMARC1; ") {
+			// TODO add advanced DMARC verification
+			s.AltValue = v
+			s.Verified = true
+			s.VerifiedAt = time.Now()
+		}
 	}
 
-	// TODO support advanced dmarc & SPF checks
+	return nil
+}
+
+func (s *SMTPDomainRecord) VerifySPF(match string) error {
+	// extract needed includes
+	needed := map[string]bool{}
+	for _, item := range strings.Split(s.Value, " ")[1:] {
+		if strings.HasPrefix(item, "include:") {
+			needed[item] = true
+		}
+	}
+
+	// parse current host record & construct new record
+	n := []string{"v=spf1"}
+	hasAll := false
+
+	addMissing := func() {
+		lst := []string{}
+		for k := range needed {
+			lst = append(lst, k)
+		}
+
+		sort.Strings(lst)
+		n = append(n, lst...)
+	}
+
+	for _, item := range strings.Split(match, " ")[1:] {
+		if item == "" {
+			continue
+		}
+
+		op := item[:1]
+		if op != "+" && op != "-" && op != "~" && op != "?" {
+			op = ""
+		} else {
+			item = item[1:]
+		}
+
+		if _, ok := needed[item]; ok {
+			if op != "" && op != "+" && op != "?" {
+				op = ""
+			}
+
+			delete(needed, item)
+			n = append(n, op+item)
+		} else if item == "all" {
+			hasAll = true
+			addMissing()
+			n = append(n, op+"all")
+			break
+		} else {
+			n = append(n, op+item)
+		}
+	}
+
+	if len(needed) > 0 && !hasAll {
+		addMissing()
+		n = append(n, "~all")
+	}
+
+	s.AltValue = strings.Join(n, " ")
+	s.Verified = len(needed) == 0
+
+	fmt.Println(match)
+	bs, _ := json.MarshalIndent(needed, "", "  ")
+	println(string(bs))
 
 	return nil
 }
@@ -115,8 +195,10 @@ type SMTPDomain struct {
 	Region         *string
 	MailsSent      int `bson:"mails_sent"`
 	Records        []SMTPDomainRecord
+	DKIMPrivateKey []byte    `graphql:"-" json:"-" bson:"dkim_private_key"`
 	CreatedAt      time.Time `bson:"created_at"`
 	UpdatedAt      time.Time `bson:"updated_at"`
+	VerifiedAt     time.Time `bson:"verified_at"`
 	UpdateToken    string    `json:"-" bson:"update_token"` // used to assert data has not changed during update functions
 }
 
@@ -141,40 +223,60 @@ func (s *SMTPDomain) GenerateID() string {
 }
 
 func (s *SMTPDomain) Verify(ctx context.Context) (e error) {
-	modified := false
 	verifiedRecords := 0
 
 	defer func() {
-		if modified {
-			s.Verified = verifiedRecords == len(s.Records)
+		s.Verified = verifiedRecords == len(s.Records)
+		s.VerifiedAt = time.Now()
 
-			// save domain
-			if err := s.Save(ctx); err != nil && e == nil {
-				e = err
-			} else if err != nil {
-				log15.Error("failed to save smtp domain", "err", err)
-			}
+		// save domain
+		if err := s.Save(ctx); err != nil && e == nil {
+			e = err
+		} else if err != nil {
+			log15.Error("failed to save smtp domain", "err", err)
 		}
 	}()
 
 	// verify each record
 	for i, record := range s.Records {
-		before := record.Verified
+		if record.Verified && record.VerifiedAt.After(time.Now().Add(-time.Minute*15)) {
+			verifiedRecords++
+			continue
+		}
+
 		if err := record.Verify(ctx); err != nil {
 			return err
 		}
 
-		if record.Verified != before {
-			modified = true
-			s.Records[i] = record
-		}
-
+		s.Records[i] = record
 		if record.Verified {
 			verifiedRecords++
 		}
 	}
 
 	return nil
+}
+
+func generateRSAKeyAndDKIMRecord(length int) (*rsa.PrivateKey, string, error) {
+	// Generate RSA private key
+	privateKey, err := rsa.GenerateKey(rand.Reader, length)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Encode the public key to DKIM format
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Generate DKIM record
+	dkimRecord := fmt.Sprintf(
+		"v=DKIM1; k=rsa; p=%s",
+		base64.StdEncoding.EncodeToString(pubKeyBytes),
+	)
+
+	return privateKey, dkimRecord, nil
 }
 
 // ---
@@ -200,6 +302,12 @@ func (Mutation) AddDomain(p graphql.ResolveParams, rbac rbac.RBAC, args NewDomai
 		return SMTPDomain{}, errors.New("invalid_host")
 	}
 
+	// generate dkim key
+	key, record, err := generateRSAKeyAndDKIMRecord(2048)
+	if err != nil {
+		return SMTPDomain{}, err
+	}
+
 	// create domain item (id is generated from org id and host to avoid duplicates)
 	dom := SMTPDomain{
 		OrganizationID: rbac.OrganizationID,
@@ -208,29 +316,34 @@ func (Mutation) AddDomain(p graphql.ResolveParams, rbac rbac.RBAC, args NewDomai
 		Verified:       false,
 		MailsSent:      0,
 		CreatedAt:      time.Now(),
+		DKIMPrivateKey: x509.MarshalPKCS1PrivateKey(key),
 		Records: []SMTPDomainRecord{
 			{
 				Type:  "TXT",
 				Host:  "_dmarc." + args.Host,
-				Value: "v=DMARC1;  p=none; rua=mailto:442f636fce044ef3998100e0361bbdcd@dmarc-reports.cloudflare.net", // TODO auto generate
+				Value: "v=DMARC1; p=none; fo=1; rua=mailto:admin@" + args.Host,
 			},
 			{
 				Type:  "TXT",
-				Host:  "mail._domainkey." + args.Host,
-				Value: "v=DKIM1; k=rsa; p=...", // TODO auto generate
+				Host:  "neo._domainkey." + args.Host,
+				Value: record,
 			},
 			{
 				Type:  "TXT",
 				Host:  args.Host,
-				Value: "v=spf1 include:eu.neodeliver.io ~all", // TODO auto generate
+				Value: "v=spf1 include:neodeliver.com ~all",
 			},
 		},
 	}
 
 	dom.GenerateID()
-	err := dom.Save(p.Context)
+
+	// save domain
+	err = dom.Save(p.Context)
 	if mongo.IsDuplicateKeyError(err) {
 		err = db.Find(p.Context, &dom, bson.M{"_id": dom.ID})
+	} else if err == nil {
+		err = dom.Verify(p.Context)
 	}
 
 	return dom, err

@@ -19,7 +19,7 @@ func main() {
 	// TODO test bounce email
 	// TODO support ARC
 
-	to := "test-nar3e0x15@srv1.mail-tester.com"
+	to := "test-9we8pz7tc@srv1.mail-tester.com"
 	c, err := Dial(ClientConfig{
 		Server: "92.eu.neodeliver.io",
 	}, to)
@@ -32,7 +32,7 @@ func main() {
 	log15.Info("Connected to client")
 
 	// Set the sender and recipient first
-	if err := c.Mail("sacha@skyhark.be"); err != nil {
+	if err := c.Mail("sacha@kupalabs.com"); err != nil {
 		log.Fatal(err)
 	} else if err := c.Rcpt(to); err != nil { // TODO test bounce email when adding multiple receipts (call Rcpt multiple times)
 		log.Fatal(err)
