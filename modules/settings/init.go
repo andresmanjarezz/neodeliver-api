@@ -8,11 +8,11 @@ import (
 // register graphql queries
 func Init(s *graphql.Builder) {
 	// query user
-	s.MongoQuery(User{}).Where(func(r rbac.RBAC) map[string]interface{} {
-		return map[string]interface{}{
-			"_id": r.UserID,
-		}
-	})
+	// s.MongoQuery(User{}).Where(func(r rbac.RBAC) map[string]interface{} {
+	// 	return map[string]interface{}{
+	// 		"_id": r.UserID,
+	// 	}
+	// })
 
 	// get team members list
 	s.MongoQuery([]TeamMember{}).Where(func(r rbac.RBAC) map[string]interface{} {

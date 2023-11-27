@@ -123,39 +123,6 @@ func (Query) ListSocialConnections(p graphql.ResolveParams) ([]SocialConnection,
 
 }
 
-type UserInfo struct {
-	Error            string
-	ErrorDescription string `json:"error_description"`
-	Email            string
-	Identities       []Identity
-}
-
-type Identity struct {
-	UserID     string `json:"user_id"`
-	Provider   string `json:"provider"`
-	Connection string `json:"connection"`
-}
-
-// FetchUser
-// fetches user information from auth0
-func (Query) FetchUser(p graphql.ResolveParams, rbac rbac.RBAC) (UserInfo, error) {
-
-	auth := Auth0()
-	var res UserInfo
-
-	url := fmt.Sprintf("/api/v2/users/%s", rbac.UserID)
-	_, _, err := auth.Get(p.Context, url, nil, &res)
-	if err != nil {
-		return res, errors.New("internal error")
-	}
-
-	if res.ErrorDescription != "" {
-		return res, errors.New(res.ErrorDescription)
-	}
-
-	return res, nil
-}
-
 type EnrollMFA struct {
 	Type string `bson:",omitempty"`
 }
@@ -174,11 +141,6 @@ type MFAResponse struct {
 	Secret            string `json:"secret"`
 }
 
-type Identities struct {
-	UserID     string `json:"user_id"`
-	Provider   string `json:"provider"`
-	Connection string `json:"connection"`
-}
 type LoginResponse struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`

@@ -146,6 +146,7 @@ func (a *auth0) Request(ctx context.Context, method string, url string, headers 
 	for k, v := range headers {
 		req.Header.Add(k, v)
 	}
+
 	rawURL, err := parser.Parse(url)
 	if err != nil {
 		return nil, 0, err

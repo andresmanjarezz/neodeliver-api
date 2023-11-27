@@ -155,11 +155,7 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 	}
 
 	// update team member
-	user := User{}
-	err = db.Find(p.Context, &user, map[string]interface{}{
-		"_id": rbac.UserID,
-	})
-
+	user, err := GetUserByID(p.Context, rbac.UserID)
 	if err != nil {
 		return u, err
 	}
@@ -170,7 +166,7 @@ func (Mutation) AcceptInvitation(p graphql.ResolveParams, rbac rbac.RBAC, args A
 		"user_id":               rbac.UserID,
 		"name":                  user.Name,
 		"email":                 user.Email,
-		"profile_picture":       user.ProfilePicture,
+		"profile_picture":       user.Picture,
 		"invitation_expires_at": nil,
 		"invitation_token":      "",
 		"updated_at":            time.Now(),
