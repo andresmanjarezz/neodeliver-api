@@ -16,6 +16,7 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
+	"neodeliver.com/engine/rbac"
 )
 
 var auth *auth0
@@ -103,7 +104,6 @@ func (a *auth0) getToken(ctx context.Context) (string, error) {
 		mp["AUTH0_TOKEN"] = res.Token
 		godotenv.Write(mp, ".env")
 	}
-	fmt.Println("here====")
 	return res.Token, nil
 }
 
@@ -190,6 +190,10 @@ func (a *auth0) Patch(ctx context.Context, url string, headers map[string]string
 
 func (a *auth0) Get(ctx context.Context, url string, headers map[string]string, res interface{}) ([]byte, int, error) {
 	return a.Request(ctx, "GET", url, headers, nil, res)
+}
+
+func (a *auth0) Delete(ctx context.Context, url string, headers map[string]string, res interface{}) ([]byte, int, error) {
+	return a.Request(ctx, "DELETE", url, headers, nil, res)
 }
 
 // ----
@@ -335,7 +339,63 @@ func (a *auth0) EnrollAuthenticationMethod(ctx context.Context, userID, secret s
 	return true, nil
 }
 
-// ----
+func (a *auth0) LinkAccount(ctx context.Context, rbac rbac.RBAC, args LinkAccount, res interface{}) (bool, error) {
+
+	if args.LinkWith != nil {
+		return a.LinkAccountWithJWT(ctx, rbac.Token, *args.LinkWith, rbac.UserID, res)
+	}
+
+	payload := map[string]interface{}{}
+	if args.Provider != nil && args.UserID != nil {
+		payload["provider"] = args.Provider
+		payload["user_id"] = args.UserID
+	} else {
+		return false, errors.New("invalid payload")
+	}
+
+	if args.ConnectionID != nil {
+		payload["connection_id"] = args.ConnectionID
+	}
+
+	url := fmt.Sprintf("/api/v2/users/%s/identities", rbac.UserID)
+	_, _, err := auth.Post(ctx, url, nil, payload, res)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (a *auth0) LinkAccountWithJWT(ctx context.Context, primaryToken, secondaryToken, userID string, res interface{}) (bool, error) {
+
+	url := fmt.Sprintf("/api/v2/users/%s/identities", userID)
+
+	_, _, err := auth.Post(ctx, url,
+		map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", primaryToken),
+		},
+		map[string]interface{}{
+			"link_with": secondaryToken,
+		},
+		res,
+	)
+	if err != nil {
+		return false, err
+	}
+	return true, err
+
+}
+
+func (a *auth0) UnlinkAccount(ctx context.Context, provider, userID, secondaryUserID string, res interface{}) (bool, error) {
+
+	url := fmt.Sprintf("/api/v2/users/%s/identities/%s/%s", userID, provider, secondaryUserID)
+	_, _, err := auth.Delete(ctx, url, nil, res)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
 
 type auth0Claims struct {
 	Exp int64
