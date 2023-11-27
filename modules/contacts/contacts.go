@@ -210,7 +210,7 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		}
 	}
 	if count != 0 {
-		return c, errors.New(utils.MessageTagDuplicationError)
+		return c, errors.New(utils.MessageTagAssignDuplicationError)
 	}
 
 	c.Tags = append(c.Tags, args.TagID)

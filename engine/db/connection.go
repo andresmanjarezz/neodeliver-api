@@ -54,7 +54,13 @@ func Find(ctx context.Context, o interface{}, filter interface{}, opts ...*optio
 	return err
 }
 
-func FindAll(ctx context.Context, o interface{}, filter interface{}) error {
+func FindAndUpdate(ctx context.Context, o interface{}, filter interface{}, update interface{}, opts ...*options.FindOneAndUpdateOptions) error {
+	c := Client()
+	err := c.Collection(CollectionName(o)).FindOneAndUpdate(ctx, filter, update).Decode(o)
+	return err
+}
+
+func FindAll(ctx context.Context, o interface{}, result interface{}, filter interface{}) error {
 	c := Client()
 
 	cursor, err := c.Collection(CollectionName(o)).Find(ctx, filter)
@@ -62,13 +68,8 @@ func FindAll(ctx context.Context, o interface{}, filter interface{}) error {
 		return err
 	}
 
-	if cursor.Next(ctx) {
-		err := cursor.Decode(o)
-		if err != nil {
-			return err
-		}
-	} else {
-		return mongo.ErrNoDocuments
+	if err := cursor.All(ctx, result); err != nil {
+		return err
 	}
 
 	return nil

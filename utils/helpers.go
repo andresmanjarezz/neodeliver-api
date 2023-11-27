@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	isolang "github.com/emvi/iso-639-1"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func ValidateEmail(email *string) bool {
@@ -29,10 +30,13 @@ func ValidateNotificationToken(token *string) bool {
 	return match
 }
 
-func ValidateMongoDBQuery(query *string) bool {
-	queryRegex := `\{\s*\$[a-zA-Z]+\s*:\s*\[.*\]\s*\}`
-	match, _ := regexp.MatchString(queryRegex, *query)
-	return match
+func ConvertQueryToBSON(query string) (bson.M, error) {
+	bsonMap := bson.M{}
+	err := bson.UnmarshalExtJSON([]byte(query), true, &bsonMap)
+	if err != nil {
+		return nil, err
+	}
+	return bsonMap, nil
 }
 
 func FilterNilFields(obj interface{}) interface{} {

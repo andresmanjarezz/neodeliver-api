@@ -33,9 +33,9 @@ type SegmentID struct {
 }
 
 func (s SegmentData) Validate() error {
-	match := utils.ValidateMongoDBQuery(s.Filters)
-	if !match {
-		return errors.New("Filter query is not valid")
+	_, err := utils.ConvertQueryToBSON(*s.Filters)
+	if err != nil {
+		return errors.New(utils.MessageSegmentQueryInvalid)
 	}
 	return nil
 }
@@ -88,4 +88,28 @@ func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter Se
 	s := Segment{}
 	err := db.Delete(p.Context, &s, map[string]string{"_id": filter.ID})
 	return true, err
+}
+
+func (Mutation) PerformQuery(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentID) ([]Contact, error) {
+	s := Segment{}
+	err := db.Find(p.Context, &s, map[string]string{
+		"_id": args.ID,
+	})
+	if err != nil {
+		return []Contact{}, errors.New(utils.MessageSegmentCannotFindError)
+	}
+
+	bsonObj, err := utils.ConvertQueryToBSON(*s.Filters)
+	if err != nil {
+		return []Contact{}, err
+	}
+
+	c := Contact{}
+	contacts := []Contact{}
+	err = db.FindAll(p.Context, &c, &contacts, bsonObj)
+	if err != nil {
+		return []Contact{}, errors.New(utils.MessageDefaultError)
+	}
+	
+	return contacts, err
 }
