@@ -367,7 +367,6 @@ func (a *auth0) LinkAccount(ctx context.Context, rbac rbac.RBAC, args LinkAccoun
 }
 
 func (a *auth0) LinkAccountWithJWT(ctx context.Context, primaryToken, secondaryToken, userID string, res interface{}) (bool, error) {
-
 	url := fmt.Sprintf("/api/v2/users/%s/identities", userID)
 
 	_, _, err := auth.Post(ctx, url,
@@ -379,11 +378,8 @@ func (a *auth0) LinkAccountWithJWT(ctx context.Context, primaryToken, secondaryT
 		},
 		res,
 	)
-	if err != nil {
-		return false, err
-	}
-	return true, err
 
+	return err == nil, err
 }
 
 func (a *auth0) UnlinkAccount(ctx context.Context, provider, userID, secondaryUserID string, res interface{}) (bool, error) {
@@ -395,6 +391,23 @@ func (a *auth0) UnlinkAccount(ctx context.Context, provider, userID, secondaryUs
 	}
 
 	return true, nil
+}
+
+// update the user metadata
+func (a *auth0) UpdateMetaData(ctx context.Context, userID string, metaData interface{}, res interface{}) (bool, error) {
+	url := fmt.Sprintf("/api/v2/users/%v", userID)
+	_, _, err := auth.Patch(ctx, url, nil, metaData, res)
+	return err == nil, err
+}
+
+func (a *auth0) EnableMFA(ctx context.Context, userID string, flag bool, res interface{}) (bool, error) {
+	payload := map[string]interface{}{
+		"user_metadata": map[string]interface{}{
+			"use_mfa": flag,
+		},
+	}
+
+	return a.UpdateMetaData(ctx, userID, payload, res)
 }
 
 type auth0Claims struct {
