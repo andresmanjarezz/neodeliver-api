@@ -50,12 +50,22 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 		CreatedAt:		time.Now(),
 		SegmentData:	args,
 	}
-
+	
+	utils.RemoveSpaces(s.Filters)
 	if err := s.Validate(); err != nil {
 		return s, err
 	}
 
-	_, err := db.Save(p.Context, &s)
+	bsonObj, err := utils.ConvertQueryToBSON(*args.Filters)
+	if err != nil {
+		return s, err
+	}
+
+	if utils.GetQueryBSONDepth(bsonObj) > 4 {
+		return s, errors.New(utils.MessageSegmentQueryDepthExceedError)
+	}
+
+	_, err = db.Save(p.Context, &s)
 
 	return s, err
 }

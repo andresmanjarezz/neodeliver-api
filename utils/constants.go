@@ -23,6 +23,7 @@ const (
 
 	MessageSegmentNameDuplicationError	string = "This segment is already registered within your organization."
 	MessageSegmentCannotFindError	string = "Cannot find the segment."
+	MessageSegmentQueryDepthExceedError	string = "The maximum depth of the query is 4."
 
 	MessageDefaultError				string = "Internal error occured."
 )
