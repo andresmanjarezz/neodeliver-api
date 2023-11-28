@@ -116,7 +116,7 @@ func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter Se
 	return true, err
 }
 
-func (Mutation) PerformQuery(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentID) ([]Contact, error) {
+func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentID) ([]Contact, error) {
 	s := Segment{}
 	err := db.Find(p.Context, &s, map[string]string{
 		"_id": args.ID,
