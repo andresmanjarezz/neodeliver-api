@@ -184,15 +184,13 @@ func MarkForDeletion(ctx context.Context, args *UserDeletionSchedule) error {
 	u := &UserDeletionSchedule{}
 	err := db.Find(ctx, u, bson.M{"user_id": args.UserId})
 
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return db.Create(ctx, args)
-	} else if err != nil {
+	if !errors.Is(err, mongo.ErrNoDocuments) {
 		return err
 	} else if u.UserId != "" {
 		return errors.New("user is already marked for deleteion")
 	}
 
-	return nil
+	return db.Create(ctx, args)
 }
 
 // ListUsersMarkedForDeletion
