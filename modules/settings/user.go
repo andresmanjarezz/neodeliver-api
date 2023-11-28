@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/graphql-go/graphql"
+	"github.com/inconshreveable/log15"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"neodeliver.com/engine/db"
 	"neodeliver.com/engine/rbac"
 )
@@ -166,4 +170,77 @@ func mapContainsKey(m map[string]interface{}, key ...string) bool {
 	}
 
 	return false
+}
+
+type UserDeletionSchedule struct {
+	UserId       string    `bson:"user_id"`
+	DeletionDate time.Time `bson:"deletion_date"`
+	Deleted      bool      `bson:"deleted"`
+}
+
+// MarkForDeletion
+func MarkForDeletion(ctx context.Context, args *UserDeletionSchedule) error {
+
+	u := &UserDeletionSchedule{}
+	err := db.Find(ctx, u, bson.M{"user_id": args.UserId})
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return db.Create(ctx, args)
+	} else if err != nil {
+		return err
+	} else if u.UserId != "" {
+		return errors.New("user is already marked for deleteion")
+	}
+
+	return nil
+}
+
+// ListUsersMarkedForDeletion
+func ListUsersMarkedForDeletion(ctx context.Context) ([]UserDeletionSchedule, error) {
+
+	filters := bson.M{
+		"deleted": false,
+		"deletion_date": bson.M{
+			// Check the date which reached to delete the user
+			"$lte": time.Now(),
+		},
+	}
+
+	users := []UserDeletionSchedule{}
+	if err := db.FindAll(ctx, &UserDeletionSchedule{}, &users, filters); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func DeleteUser(ctx context.Context, userID string, wg *sync.WaitGroup) error {
+	defer wg.Done()
+	return db.Delete(ctx, &UserDeletionSchedule{}, bson.M{"user_id": userID})
+}
+
+func DeleteScheduledUsers(ctx context.Context, t time.Duration) error {
+
+	ticker := time.NewTicker(t)
+
+	for ; ; <-ticker.C {
+		users, err := ListUsersMarkedForDeletion(ctx)
+		if err != nil {
+			return nil
+		}
+
+		wg := sync.WaitGroup{}
+		for _, u := range users {
+			wg.Add(1)
+			go func(id string) {
+				//TODO: delete related user information
+				err := DeleteUser(ctx, id, &wg)
+				if err != nil {
+					log15.Info("failed to delete user", id, err)
+				}
+			}(u.UserId)
+
+		}
+		wg.Wait()
+	}
 }

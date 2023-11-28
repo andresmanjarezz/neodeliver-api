@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/graphql-go/graphql"
 	"neodeliver.com/engine/rbac"
@@ -297,6 +298,36 @@ func (Mutation) UnlinkUserAccount(p graphql.ResolveParams, rbac rbac.RBAC, args 
 		if _, ok := v["error"]; ok {
 			return false, errors.New(v["message"].(string))
 		}
+	}
+
+	return true, nil
+
+}
+
+func (Mutation) DeleteAccount(p graphql.ResolveParams, rbac rbac.RBAC) (bool, error) {
+
+	auth := Auth0()
+
+	u := UserDeletionSchedule{
+		UserId:       rbac.UserID,
+		DeletionDate: time.Now(),
+		Deleted:      false,
+	}
+	err := MarkForDeletion(p.Context, &u)
+	if err != nil {
+		return false, err
+	}
+
+	res := struct {
+		StatusCode int    `json:"statusCode"`
+		Message    string `json:"message"`
+	}{}
+
+	_, err = auth.DeleteAuth0User(p.Context, u.UserId, &res)
+	if err != nil {
+		return false, err
+	} else if res.StatusCode != 204 {
+		return false, errors.New(res.Message)
 	}
 
 	return true, nil
