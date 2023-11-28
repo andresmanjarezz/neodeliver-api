@@ -3,7 +3,9 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/graphql-go/graphql"
@@ -304,30 +306,34 @@ func (Mutation) UnlinkUserAccount(p graphql.ResolveParams, rbac rbac.RBAC, args 
 
 }
 
+// DeleteAccount
 func (Mutation) DeleteAccount(p graphql.ResolveParams, rbac rbac.RBAC) (bool, error) {
 
 	auth := Auth0()
+	rententionDays := os.Getenv("USER_DELETION_RENTENTION_DAYS")
+	if rententionDays == "" {
+		return false, errors.New("user deletion rentention days is not set. Please set the USER_DELETION_RENTENTION_DAYS environment variable")
+	}
+
+	days, err := strconv.Atoi(rententionDays)
+	if err != nil {
+		return false, err
+	}
 
 	u := UserDeletionSchedule{
 		UserId:       rbac.UserID,
-		DeletionDate: time.Now(),
+		DeletionDate: time.Now().AddDate(0, 0, days),
 		Deleted:      false,
 	}
-	err := MarkForDeletion(p.Context, &u)
+	err = MarkForDeletion(p.Context, &u)
 	if err != nil {
 		return false, err
 	}
 
-	res := struct {
-		StatusCode int    `json:"statusCode"`
-		Message    string `json:"message"`
-	}{}
-
-	_, err = auth.DeleteAuth0User(p.Context, u.UserId, &res)
+	// remove the user from auth0
+	_, err = auth.DeleteAuth0User(p.Context, u.UserId, nil)
 	if err != nil {
 		return false, err
-	} else if res.StatusCode != 204 {
-		return false, errors.New(res.Message)
 	}
 
 	return true, nil

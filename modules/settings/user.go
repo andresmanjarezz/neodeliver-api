@@ -212,33 +212,41 @@ func ListUsersMarkedForDeletion(ctx context.Context) ([]UserDeletionSchedule, er
 	return users, nil
 }
 
-func DeleteUser(ctx context.Context, userID string, wg *sync.WaitGroup) error {
-	defer wg.Done()
+// DeleteUser
+// Delete the scheduled user entry from the database
+func DeleteUser(ctx context.Context, userID string) error {
+	// TODO : Do the other user delete operations
+
+	// remove the entry from collection
 	return db.Delete(ctx, &UserDeletionSchedule{}, bson.M{"user_id": userID})
 }
 
-func DeleteScheduledUsers(ctx context.Context, t time.Duration) error {
+// DeleteScheduledUsers
+// this function can be used with a ticker to run with some particular intervals
+func DeleteScheduledUsers(ctx context.Context) error {
 
-	ticker := time.NewTicker(t)
+	log15.Info("delete scheduled user ticked....")
 
-	for ; ; <-ticker.C {
-		users, err := ListUsersMarkedForDeletion(ctx)
-		if err != nil {
-			return nil
-		}
-
-		wg := sync.WaitGroup{}
-		for _, u := range users {
-			wg.Add(1)
-			go func(id string) {
-				//TODO: delete related user information
-				err := DeleteUser(ctx, id, &wg)
-				if err != nil {
-					log15.Info("failed to delete user", id, err)
-				}
-			}(u.UserId)
-
-		}
-		wg.Wait()
+	users, err := ListUsersMarkedForDeletion(ctx)
+	if err != nil {
+		return nil
 	}
+	wg := sync.WaitGroup{}
+	wg.Add(len(users))
+
+	for _, u := range users {
+		// delete the users parallelly
+		go func(id string, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			err := DeleteUser(ctx, id)
+			if err != nil {
+				log15.Info("failed to delete user", id, err)
+			}
+		}(u.UserId, &wg)
+
+	}
+	wg.Wait()
+
+	return nil
 }
