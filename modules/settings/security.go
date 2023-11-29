@@ -310,12 +310,12 @@ func (Mutation) UnlinkUserAccount(p graphql.ResolveParams, rbac rbac.RBAC, args 
 func (Mutation) DeleteAccount(p graphql.ResolveParams, rbac rbac.RBAC) (bool, error) {
 
 	auth := Auth0()
-	rententionDays := os.Getenv("USER_DELETION_RENTENTION_DAYS")
-	if rententionDays == "" {
-		return false, errors.New("user deletion rentention days is not set. Please set the USER_DELETION_RENTENTION_DAYS environment variable")
+	retentionDays := os.Getenv("USER_DELETION_RETENTION_DAYS")
+	if retentionDays == "" {
+		return false, errors.New("user deletion retention days is not set. Please set the USER_DELETION_RETENTION_DAYS environment variable")
 	}
 
-	days, err := strconv.Atoi(rententionDays)
+	days, err := strconv.Atoi(retentionDays)
 	if err != nil {
 		return false, err
 	}
