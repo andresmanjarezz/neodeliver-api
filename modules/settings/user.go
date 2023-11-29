@@ -175,7 +175,6 @@ func mapContainsKey(m map[string]interface{}, key ...string) bool {
 type UserDeletionSchedule struct {
 	UserId       string    `bson:"user_id"`
 	DeletionDate time.Time `bson:"deletion_date"`
-	Deleted      bool      `bson:"deleted"`
 }
 
 // MarkForDeletion
@@ -197,7 +196,6 @@ func MarkForDeletion(ctx context.Context, args *UserDeletionSchedule) error {
 func ListUsersMarkedForDeletion(ctx context.Context) ([]UserDeletionSchedule, error) {
 
 	filters := bson.M{
-		"deleted": false,
 		"deletion_date": bson.M{
 			// Check the date which reached to delete the user
 			"$lte": time.Now(),

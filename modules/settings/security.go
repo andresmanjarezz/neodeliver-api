@@ -323,7 +323,6 @@ func (Mutation) DeleteAccount(p graphql.ResolveParams, rbac rbac.RBAC) (bool, er
 	u := UserDeletionSchedule{
 		UserId:       rbac.UserID,
 		DeletionDate: time.Now().AddDate(0, 0, days),
-		Deleted:      false,
 	}
 	err = MarkForDeletion(p.Context, &u)
 	if err != nil {
