@@ -187,7 +187,10 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter ContactID) (bool, error) {
 	c := Contact{}
 	err := db.Delete(p.Context, &c, map[string]string{"_id": filter.ID})
-	return true, err
+	if err != nil {
+		return false, errors.New(utils.MessageContactCannotDeleteError)
+	}
+	return true, nil
 }
 
 func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
