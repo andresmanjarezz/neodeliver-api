@@ -180,6 +180,9 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	err = db.Update(p.Context, &c, map[string]string{
 		"_id": args.ID,
 	}, data)
+	if err != nil {
+		return c, errors.New(utils.MessageDefaultError)
+	}
 
 	return c, nil
 }

@@ -15,6 +15,7 @@ const (
 	MessageDuplicationError			string = "The ID or email address is already registered within your organization."
 	MessageContactCannotFindError	string = "Cannot find the contact."
 	MessageContactCannotDeleteError	string = "Cannot delete the contact."
+	MessageContactCannotUpdateError	string = "Cannot update the contact."
 
 	MessageTagAssignDuplicationError	string = "This tag is already assigned to this contact."
 	MessageTagNameDuplicationError	string = "This tag name is already registerd within your organization."
