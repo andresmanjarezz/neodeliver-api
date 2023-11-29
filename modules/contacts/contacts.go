@@ -64,8 +64,6 @@ func (c ContactData) Validate() error {
 		}
 	}
 
-	// TODO verify notification tokens format
-
 	return nil
 }
 
@@ -84,7 +82,7 @@ type ContactID struct {
 
 type ContactEdit struct {
 	ID   string
-	Data ContactData	`json:"data" bson:"data"`
+	Data ContactData	`json:"data"`
 }
 
 type TagAssign struct {

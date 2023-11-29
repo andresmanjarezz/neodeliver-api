@@ -6,6 +6,7 @@ import (
 	
 	"github.com/graphql-go/graphql"
 	"github.com/segmentio/ksuid"
+	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/db"
 	"neodeliver.com/engine/rbac"
 	"neodeliver.com/utils"
@@ -40,11 +41,20 @@ type TransactionalMessageInput	struct {
 	FolderID	string	`json:"folder_id"`
 }
 
-type TransactionalMessageFolderInput	struct {
+type TransactionalObjectID struct {
+	ID			string `json:"_id"`
+}
+
+type TransactionalMessageFolderData struct {
 	Name		string	`json:"name"`
 }
 
-func (Mutation) CreateTransactionalMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderInput) (TransactionalMessageFolder, error) {
+type TransactionalMessageFolderEdit struct {
+	ID			string	`json:"id"`
+	Data		string	`json:"data"`
+}
+
+func (Mutation) CreateTransactionalMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderData) (TransactionalMessageFolder, error) {
 	f := TransactionalMessageFolder{
 		ID:				"tfld_" + ksuid.New().String(),
 		OrganizationID:	rbac.OrganizationID,
@@ -84,4 +94,52 @@ func (Mutation) CreateTransactionalMessage(p graphql.ResolveParams, rbac rbac.RB
 		return m, errors.New(utils.MessageTagCannotAssignError)
 	}
 	return m, nil
+}
+
+func (Mutation) DeleteTransactionalMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, filter TransactionalObjectID) (bool, error) {
+	f := TransactionalMessageFolder{}
+	err := db.Find(p.Context, &f, map[string]string{
+		"_id": filter.ID,
+	})
+	if err != nil {
+		return false, errors.New(utils.MessageTransactionalMessageFolderCannotDeleteError)
+	}
+	for _, messageID := range f.TransactionalMessages {
+		m := TransactionalMessage{}
+		err = db.Delete(p.Context, &m, map[string]string{"_id": messageID})
+		if err != nil {
+			return false, errors.New(utils.MessageTransactionalMessageFolderCannotDeleteError)
+		}
+	}
+	err = db.Delete(p.Context, &f, map[string]string{"_id": filter.ID})
+	if err != nil {
+		return false, errors.New(utils.MessageTransactionalMessageFolderCannotDeleteError)
+	}
+	return true, nil
+}
+
+func (Mutation) DeleteTransactionalMessage(p graphql.ResolveParams, rbac rbac.RBAC, filter TransactionalObjectID) (bool, error) {
+	m := TransactionalMessage{}
+	err := db.Delete(p.Context, &m, map[string]string{"_id": filter.ID})
+	if err != nil {
+		return false, errors.New(utils.MessageTransactionalMessageCannotDeleteError)
+	}
+	return true, nil
+}
+
+func (Mutation) UpdateTransactionMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderEdit) (TransactionalMessageFolder, error) {
+	f := TransactionalMessageFolder{}
+
+	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
+	if len(data) == 0 {
+		return f, errors.New(utils.MessageNoUpdateError)
+	}
+
+	err := db.Update(p.Context, &f, map[string]string{
+		"_id": args.ID,
+	}, data)
+	if err != nil {
+		return f, errors.New(utils.MessageDefaultError)
+	}
+	return f, nil
 }

@@ -25,6 +25,9 @@ const (
 	MessageSegmentCannotFindError	string = "Cannot find the segment."
 	MessageSegmentQueryDepthExceedError	string = "The maximum depth of the query is 4."
 
+	MessageTransactionalMessageFolderCannotDeleteError	string = "Cannot delete the transactional message folder."
+	MessageTransactionalMessageCannotDeleteError	string = "Cannot delete the transactional message folder."
+
 	MessageNoUpdateError			string = "There is no data to update."
 	MessageDefaultError				string = "Internal error occured."
 )
