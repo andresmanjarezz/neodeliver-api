@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/graphql-go/graphql"
+	"github.com/inconshreveable/log15"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"neodeliver.com/engine/db"
 	"neodeliver.com/engine/rbac"
 )
@@ -166,4 +170,81 @@ func mapContainsKey(m map[string]interface{}, key ...string) bool {
 	}
 
 	return false
+}
+
+type UserDeletionSchedule struct {
+	UserId       string    `bson:"user_id"`
+	DeletionDate time.Time `bson:"deletion_date"`
+}
+
+// MarkForDeletion
+func MarkForDeletion(ctx context.Context, args *UserDeletionSchedule) error {
+
+	u := &UserDeletionSchedule{}
+	err := db.Find(ctx, u, bson.M{"user_id": args.UserId})
+
+	if !errors.Is(err, mongo.ErrNoDocuments) {
+		return err
+	} else if u.UserId != "" {
+		return errors.New("user is already marked for deleteion")
+	}
+
+	return db.Create(ctx, args)
+}
+
+// ListUsersMarkedForDeletion
+func ListUsersMarkedForDeletion(ctx context.Context) ([]UserDeletionSchedule, error) {
+
+	filters := bson.M{
+		"deletion_date": bson.M{
+			// Check the date which reached to delete the user
+			"$lte": time.Now(),
+		},
+	}
+
+	users := []UserDeletionSchedule{}
+	if err := db.FindAll(ctx, &UserDeletionSchedule{}, &users, filters); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// DeleteUser
+// Delete the scheduled user entry from the database
+func DeleteUser(ctx context.Context, userID string) error {
+	// TODO : Do the other user delete operations
+
+	// remove the entry from collection
+	return db.Delete(ctx, &UserDeletionSchedule{}, bson.M{"user_id": userID})
+}
+
+// DeleteScheduledUsers
+// this function can be used with a ticker to run with some particular intervals
+func DeleteScheduledUsers(ctx context.Context) error {
+
+	log15.Info("delete scheduled user ticked....")
+
+	users, err := ListUsersMarkedForDeletion(ctx)
+	if err != nil {
+		return nil
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(len(users))
+
+	for _, u := range users {
+		// delete the users parallelly
+		go func(id string, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			err := DeleteUser(ctx, id)
+			if err != nil {
+				log15.Info("failed to delete user", id, err)
+			}
+		}(u.UserId, &wg)
+
+	}
+	wg.Wait()
+
+	return nil
 }

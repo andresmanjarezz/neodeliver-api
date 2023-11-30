@@ -411,6 +411,16 @@ func (a *auth0) EnableMFA(ctx context.Context, userID string, flag bool, res int
 	return a.UpdateMetaData(ctx, userID, payload, res)
 }
 
+// DeleteUser
+// deletes user from auth0.
+func (a *auth0) DeleteAuth0User(ctx context.Context, userID string, res interface{}) (bool, error) {
+
+	url := fmt.Sprintf("/api/v2/users/%s", userID)
+	_, statusCode, _ := a.Delete(ctx, url, nil, &res)
+
+	return statusCode == 204, nil
+}
+
 type auth0Claims struct {
 	Exp int64
 }

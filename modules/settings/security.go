@@ -3,7 +3,10 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
+	"strconv"
+	"time"
 
 	"github.com/graphql-go/graphql"
 	"neodeliver.com/engine/rbac"
@@ -297,6 +300,39 @@ func (Mutation) UnlinkUserAccount(p graphql.ResolveParams, rbac rbac.RBAC, args 
 		if _, ok := v["error"]; ok {
 			return false, errors.New(v["message"].(string))
 		}
+	}
+
+	return true, nil
+
+}
+
+// DeleteAccount
+func (Mutation) DeleteAccount(p graphql.ResolveParams, rbac rbac.RBAC) (bool, error) {
+
+	auth := Auth0()
+	retentionDays := os.Getenv("USER_DELETION_RETENTION_DAYS")
+	if retentionDays == "" {
+		return false, errors.New("user deletion retention days is not set. Please set the USER_DELETION_RETENTION_DAYS environment variable")
+	}
+
+	days, err := strconv.Atoi(retentionDays)
+	if err != nil {
+		return false, err
+	}
+
+	u := UserDeletionSchedule{
+		UserId:       rbac.UserID,
+		DeletionDate: time.Now().AddDate(0, 0, days),
+	}
+	err = MarkForDeletion(p.Context, &u)
+	if err != nil {
+		return false, err
+	}
+
+	// remove the user from auth0
+	_, err = auth.DeleteAuth0User(p.Context, u.UserId, nil)
+	if err != nil {
+		return false, err
 	}
 
 	return true, nil
