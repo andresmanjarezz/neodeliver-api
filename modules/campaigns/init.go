@@ -28,27 +28,6 @@ func Init(s *graphql.Builder) {
 		}
 	})
 
-	// query multiple email campaigns
-	s.MongoQuery([]EmailCampaign{}).Where(func(r rbac.RBAC) map[string]interface{} {
-		return map[string]interface{}{
-			"organization_id": r.OrganizationID,
-		}
-	})
-
-	// query multiple SMS campaigns
-	s.MongoQuery([]SMSCampaign{}).Where(func(r rbac.RBAC) map[string]interface{} {
-		return map[string]interface{}{
-			"organization_id": r.OrganizationID,
-		}
-	})
-
-	// query multiple notification campaigns
-	s.MongoQuery([]NotificationCampaign{}).Where(func(r rbac.RBAC) map[string]interface{} {
-		return map[string]interface{}{
-			"organization_id": r.OrganizationID,
-		}
-	})
-
 	s.AddMutationMethods(Mutation{})
 }
 

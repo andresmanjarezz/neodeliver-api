@@ -211,7 +211,8 @@ func (s *SMTPDomain) Save(ctx context.Context) error {
 		return db.Create(ctx, s)
 	}
 
-	return db.UpdateOne(ctx, s, bson.M{"_id": s.ID, "update_token": oldToken}, s)
+	_, err := db.UpdateOne(ctx, s, bson.M{"_id": s.ID, "update_token": oldToken}, s)
+	return err
 }
 
 func (s *SMTPDomain) GenerateID() string {

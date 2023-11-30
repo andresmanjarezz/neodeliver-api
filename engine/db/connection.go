@@ -115,10 +115,9 @@ func Update(ctx context.Context, o interface{}, filter interface{}, update inter
 	return res.Decode(o)
 }
 
-func UpdateOne(ctx context.Context, o interface{}, filter interface{}, update interface{}) error {
+func UpdateOne(ctx context.Context, o interface{}, filter interface{}, update interface{}) (*mongo.UpdateResult, error) {
 	c := Client().Collection(CollectionName(o))
-	_, err := c.UpdateOne(ctx, filter, bson.M{"$set": update})
-	return err
+	return c.UpdateOne(ctx, filter, bson.M{"$set": update})
 }
 
 func Delete(ctx context.Context, o interface{}, filter interface{}) error {
