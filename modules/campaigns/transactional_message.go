@@ -42,7 +42,7 @@ type TransactionalMessageInput	struct {
 }
 
 type TransactionalObjectID struct {
-	ID			string `json:"_id"`
+	ID			string `json:"id"`
 }
 
 type TransactionalMessageFolderData struct {
@@ -51,7 +51,12 @@ type TransactionalMessageFolderData struct {
 
 type TransactionalMessageFolderEdit struct {
 	ID			string	`json:"id"`
-	Data		string	`json:"data"`
+	Data		TransactionalMessageFolderData	`json:"data"`
+}
+
+type TransactionalMessageEdit struct {
+	ID			string	`json:"id"`
+	Data		TransactionalMessageData	`json:"data"`
 }
 
 func (Mutation) CreateTransactionalMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderData) (TransactionalMessageFolder, error) {
@@ -142,4 +147,21 @@ func (Mutation) UpdateTransactionMessageFolder(p graphql.ResolveParams, rbac rba
 		return f, errors.New(utils.MessageDefaultError)
 	}
 	return f, nil
+}
+
+func (Mutation) UpdateTransactionalMessage(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageEdit) (TransactionalMessage, error) {
+	m := TransactionalMessage{}
+
+	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
+	if len(data) == 0 {
+		return m, errors.New(utils.MessageNoUpdateError)
+	}
+
+	err := db.Update(p.Context, &m, map[string]string{
+		"_id": args.ID,
+	}, data)
+	if err != nil {
+		return m, errors.New(utils.MessageDefaultError)
+	}
+	return m, nil
 }

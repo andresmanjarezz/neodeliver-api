@@ -16,17 +16,21 @@ const (
 	MessageContactCannotFindError	string = "Cannot find the contact."
 
 	MessageTagAssignDuplicationError	string = "This tag is already assigned to this contact."
-	MessageTagNameDuplicationError	string = "This tag name is already registerd within your organization."
-	MessageTagNotAssignedError		string = "This tag is not assigned to this contact."
-	MessageTagCannotAssignError		string = "Cannot assign tag to this contact."
-	MessageTagCannotFindError		string = "Cannot find the tag."
+	MessageTagNameDuplicationError		string = "This tag name is already registerd within your organization."
+	MessageTagNotAssignedError			string = "This tag is not assigned to this contact."
+	MessageTagCannotAssignError			string = "Cannot assign tag to this contact."
+	MessageTagCannotFindError			string = "Cannot find the tag."
 
 	MessageSegmentNameDuplicationError	string = "This segment name is already registered."
-	MessageSegmentCannotFindError	string = "Cannot find the segment."
+	MessageSegmentCannotFindError		string = "Cannot find the segment."
 	MessageSegmentQueryDepthExceedError	string = "The maximum depth of the query is 4."
 
 	MessageTransactionalMessageFolderCannotDeleteError	string = "Cannot delete the transactional message folder."
-	MessageTransactionalMessageCannotDeleteError	string = "Cannot delete the transactional message folder."
+	MessageTransactionalMessageCannotDeleteError		string = "Cannot delete the transactional message folder."
+
+	MessageCampaignCannotFindError		string = "Cannot find the campaign."
+	MessageCampaignCannotUpdateError	string = "Cannot update the campaign."
+	MessageCampaignCannotDeleteError	string = "Cannot delete the campaign."
 
 	MessageNoUpdateError			string = "There is no data to update."
 	MessageDefaultError				string = "Internal error occured."

@@ -2,11 +2,14 @@ package campaigns
 
 import (
 	"time"
+	"errors"
 	
 	"github.com/graphql-go/graphql"
 	"github.com/segmentio/ksuid"
+	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/db"
 	"neodeliver.com/engine/rbac"
+	"neodeliver.com/utils"
 )
 
 type NotificationCampaign struct {
@@ -25,6 +28,15 @@ type NotificationCampaignData struct {
 	Settings		NotificationCampaignSetting	`json:"settings" bson:"settings"`
 }
 
+type NotificationCampaignEdit struct {
+	ID			string	`json:"id"`
+	Data		NotificationCampaignData	`json:"data"`
+}
+
+type NotificationCampaignID struct {
+	ID			string	`json:"id"`
+}
+
 type NotificationCampaignSetting struct {
 	DeeplinkUrl			string	`json:"deeplink_url" bson:"deeplink_url"`
 	TrackingOption		string	`json:"tracking_option" bson:"tracking_option"`
@@ -40,6 +52,32 @@ func (Mutation) CreateNotificationCampaign(p graphql.ResolveParams, rbac rbac.RB
 	}
 
 	_, err := db.Save(p.Context, &n)
-	
+
 	return n, err
+}
+
+func (Mutation) UpdateNotificationCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args NotificationCampaignEdit) (NotificationCampaign, error) {
+	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
+	if len(data) == 0 {
+		return NotificationCampaign{}, errors.New(utils.MessageDefaultError)
+	}
+
+	e := NotificationCampaign{}
+	err := db.Update(p.Context, &e, map[string]string{
+		"_id": args.ID,
+	}, data)
+	if err != nil {
+		return e, errors.New(utils.MessageDefaultError)
+	}
+
+	return e, nil
+}
+
+func (Mutation) DeleteNotificationCampaign(p graphql.ResolveParams, rbac rbac.RBAC, filter NotificationCampaignID) (bool, error) {
+	e := NotificationCampaign{}
+	err := db.Delete(p.Context, &e, map[string]string{"_id": filter.ID})
+	if err != nil {
+		return false, errors.New(utils.MessageCampaignCannotDeleteError)
+	}
+	return true, nil
 }
