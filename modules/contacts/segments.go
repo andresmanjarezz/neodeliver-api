@@ -113,7 +113,10 @@ func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter SegmentID) (bool, error) {
 	s := Segment{}
 	err := db.Delete(p.Context, &s, map[string]string{"_id": filter.ID})
-	return true, err
+	if err != nil {
+		return false, errors.New(utils.MessageSegmentCannotDeleteError)
+	}
+	return true, nil
 }
 
 func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentID) ([]Contact, error) {

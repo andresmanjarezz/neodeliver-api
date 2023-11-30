@@ -103,7 +103,7 @@ func (Mutation) DeleteTag(p graphql.ResolveParams, rbac rbac.RBAC, filter TagID)
 	t := Tag{}
 	err := db.Delete(p.Context, &t, map[string]string{"_id": filter.ID})
 	if err != nil {
-		return false, errors.New(utils.MessageTagCannotFindError)
+		return false, errors.New(utils.MessageTagCannotDeleteError)
 	}
 	return true, nil
 }
