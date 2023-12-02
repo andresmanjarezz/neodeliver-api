@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/functionalfoundry/graphqlws"
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/graphql-go/graphql"
 	"neodeliver.com/engine/rbac"
 )
@@ -32,7 +34,7 @@ func Route(schema graphql.Schema) http.HandlerFunc {
 		},
 	})
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	return withSentry(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, "client_ip", "::1") // TODO set client ip
 		ctx = context.WithValue(ctx, "rbac", func() (rbac.RBAC, error) {
@@ -74,7 +76,7 @@ func Route(schema graphql.Schema) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
-	}
+	})
 }
 
 func ServePlayground() []byte {
@@ -136,4 +138,24 @@ func ServePlayground() []byte {
 	</body>
 	
 	</html>`)
+}
+
+// ---
+
+func withSentry(next http.HandlerFunc) http.HandlerFunc {
+	// To initialize Sentry's handler, you need to initialize Sentry itself beforehand
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn:           "https://ebcfb53b42f56df87c01df822fea1493@o124695.ingest.sentry.io/4506326594748416",
+		EnableTracing: true,
+		// Set TracesSampleRate to 1.0 to capture 100%
+		// of transactions for performance monitoring.
+		// We recommend adjusting this value in production,
+		TracesSampleRate: 1.0,
+	}); err != nil {
+		panic(err)
+	}
+
+	// Create an instance of sentryhttp
+	sentryHandler := sentryhttp.New(sentryhttp.Options{})
+	return sentryHandler.HandleFunc(next)
 }
