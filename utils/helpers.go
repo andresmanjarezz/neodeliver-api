@@ -4,9 +4,11 @@ import (
 	"regexp"
 	"reflect"
 	"strings"
+	"log"
 
 	isolang "github.com/emvi/iso-639-1"
 	"go.mongodb.org/mongo-driver/bson"
+	"github.com/getsentry/sentry-go"
 )
 
 func ValidateEmail(email *string) bool {
@@ -81,4 +83,30 @@ func FilterNilFields(obj interface{}) interface{} {
 	}
 
 	return result.Interface()
+}
+
+// func getNextEngagementTime(currentTime time.Time) (time.Time, error) {
+// 	var result time.Time
+// 	for _, timeStr := range EngagementTimes {
+// 		engagementTime, err := Time.Parse("3 pm", timeStr)
+// 		if err != nil {
+// 			fmt.Printf("Failed to parse engagement time: %v\n", err)
+// 			continue
+// 		}
+// 		if engagementTime.After(currentTime) {
+// 			result = engagementTime
+// 			break
+// 		}
+// 	}
+// 	if *result.IsZero() {
+// 		result = engagementTime[0]
+// 	}
+// 	return result
+// }
+
+func LogErrorToSentry(err error) {
+	eventID := sentry.CaptureException(err)
+	if eventID != nil {
+		log.Printf("Error captured with event ID: %s", *eventID)
+	}
 }

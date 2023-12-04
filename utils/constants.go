@@ -3,6 +3,8 @@ package utils
 const (
 	ContactStatusActive   string = "ACTIVE"
 	ContactStatusInactive string = "INACTIVE"
+	
+	CampaignMaxinumRecipientNumber	int = 50
 )
 
 const (
@@ -35,7 +37,14 @@ const (
 	MessageCampaignCannotFindError   string = "Cannot find the campaign."
 	MessageCampaignCannotUpdateError string = "Cannot update the campaign."
 	MessageCampaignCannotDeleteError string = "Cannot delete the campaign."
-
+	MessageCampaignCannotChangeTypeError	string = "Cannot change the type of campaign once it is created."
+	MessageCampaignMustBeOneTypeError	string = "Only one campaign type can be created at a time."
+	MessageCampaignNoLangProvidedError	string = "At least 1 language must be provided."
+	MessageCampaignRecipientExceedLimitError	string = "Exceeded maximum limit of recipients. Maximum allowed: 50"
+	MessageCampaignRecipientNotProvidedError	string = "Recipients must not be empty."
+	MessageCampaignInvalidRecipientError	string = "The recipients contain an invalid contact."
+	MessageCampaignInvalidScheduleError		string = "The campaign schedule is not valid."
+	 
 	MessageNoUpdateError string = "There is no data to update."
 	MessageDefaultError  string = "Internal error occured."
 )

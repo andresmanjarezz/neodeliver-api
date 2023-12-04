@@ -123,6 +123,7 @@ func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBA
 	s := Segment{}
 	err := db.Find(p.Context, &s, map[string]string{
 		"_id": args.ID,
+		"organization_id": rbac.OrganizationID,
 	})
 	if err != nil {
 		return []Contact{}, errors.New(utils.MessageSegmentCannotFindError)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"time"
+	"strings"
 
 	"github.com/graphql-go/graphql"
 	"github.com/inconshreveable/log15"
@@ -12,14 +13,8 @@ import (
 	ggraphql "neodeliver.com/engine/graphql"
 	"neodeliver.com/engine/rbac"
 	"neodeliver.com/utils"
+	"neodeliver.com/modules/contacts"
 )
-
-// TODO we should allow each lang to be present only once
-// TODO we should validate lang exists
-// TODO we should validate at least 1 lang is present
-// TODO we should allow up to max 50 recipients (0=allowed), which can be a mix of context ids, tags, segments (we differentiate it with id prefix)
-// TODO we should validate recipients exists
-// TODO we should add stats (sent, delivered, opened, clicked, unsubscribed, bounced, complained, failed)
 
 type Campaign struct {
 	ID             string     `bson:"_id" json:"id"`
@@ -31,6 +26,7 @@ type Campaign struct {
 	NextSchedule   *time.Time `bson:"next_schedule" json:"next_schedule"` // updated by scheduler to perform fast searches on next scheduled campaigns
 	CampaignType   string     `bson:"campaign_type" json:"campaign_type"`
 	CampaignData   `bson:",inline" json:",inline"`
+	CampaignStats  CampaignStats	`bson:"campaign_stats" json:"campaign_stats"`
 }
 
 func (c *Campaign) UpdateComputedFields() {
@@ -42,9 +38,19 @@ func (c *Campaign) UpdateComputedFields() {
 		c.CampaignType = "notification"
 	}
 
-	c.NextSchedule = nil
 	if c.Scheduler != nil {
-		// TODO update next schedule
+		if c.Scheduler.AutoOptimizeTime == true {
+
+		} else {
+			deliverTime := time.Date(c.Scheduler.BeginDate.Year(), c.Scheduler.BeginDate.Month(), c.Scheduler.BeginDate.Day(), c.Scheduler.DeliveryTime.Hour, c.Scheduler.DeliveryTime.Minute, 0, 0, time.UTC)
+			if deliverTime.Before(time.Now()) {
+				deliverTime = deliverTime.Add(24 * time.Hour)
+			}
+			c.NextSchedule = &deliverTime
+		}
+	} else {
+		deliverTime := time.Now()
+		c.NextSchedule = &deliverTime
 	}
 }
 
@@ -61,22 +67,75 @@ type CampaignData struct {
 	Notification  *NotificationCampaign `bson:"notification,omitempty" json:"notification,omitempty"`
 }
 
-func (c *CampaignData) Validate() error {
+type CampaignStats struct {
+	CampaignSent		int		`bson:"campaign_sent" json:"campaign_sent"`
+	CampaignDelivered	int		`bson:"campaign_delivered" json:"campaign_delivered"`
+	CampaignOpened		int		`bson:"campaign_opened" json:"campaign_opened"`
+	CampaignClicked		int		`bson:"campaign_clicked" json:"campaign_clicked"`
+	CampaignUnsubed		int		`bson:"campaign_unsubed" json:"campaign_unsubed"`
+	CampaignBounced		int		`bson:"campaign_bounced" json:"campaign_bounced"`
+	CampaignComplained	int		`bson:"campaign_complained" json:"campaign_complained"`
+	CampaignFailed		int		`bson:"campaign_failed" json:"campaign_failed"`
+}
+
+func (c *CampaignData) Validate(p graphql.ResolveParams, rbac rbac.RBAC) error {
 	if countNotNil(c.Email, c.SMS, c.Notification) != 1 {
 		log15.Debug("campaign validation", "email", c.Email, "sms", c.SMS, "notification", c.Notification, "count", countNotNil(c.Email, c.SMS, c.Notification))
-		return errors.New("only one campaign type can be created at a time") // todo: change to utils....
+		return errors.New(utils.MessageCampaignMustBeOneTypeError)
 	}
 
-	// TODO validate at least 1 lang is present
-	// TODO validate sub fields formats
+	if !(c.Email != nil && len(c.Email.Languages) != 0 || c.SMS != nil && len(c.SMS.Languages) != 0 || c.Notification != nil && len(c.Notification.Languages) != 0) {
+		return errors.New(utils.MessageCampaignNoLangProvidedError)
+	}
 
+	// check number of recipients
+	if len(c.Recipients) >= 50 {
+		return errors.New(utils.MessageCampaignRecipientExceedLimitError)
+	}
+
+	// convert segments into contacts 
+	for _, recipient := range c.Recipients {
+		if strings.HasPrefix(recipient, "ctc_") {
+			err := db.Find(p.Context, &contacts.Contact{}, map[string]string{
+				"_id": recipient,
+			})
+			if err != nil {
+				return errors.New(utils.MessageCampaignInvalidRecipientError)
+			}
+		} else if strings.HasPrefix(recipient, "sgt_") {
+			err := db.Find(p.Context, &contacts.Segment{}, map[string]string{
+				"_id": recipient,
+			})
+			if err != nil {
+				return errors.New(utils.MessageCampaignInvalidRecipientError)
+			}
+		} else if strings.HasPrefix(recipient, "tag_") {
+
+		} else {
+			return errors.New(utils.MessageCampaignInvalidRecipientError)
+		}
+	}
+	
+	// check scheduler
+	if c.Scheduler != nil && !c.Scheduler.EndDate.After(*c.Scheduler.BeginDate) {
+		return errors.New(utils.MessageCampaignInvalidScheduleError)
+	}
 	return nil
+}
+
+type TTime struct {
+	Hour		int		`json:"hour"`
+	Minute		int		`json:"minute"`
 }
 
 type CampaignScheduler struct {
 	AutoOptimizeTime bool   `bson:"auto_optimize_time" json:"auto_optimize_time"`
 	UseUserTimezone  bool   `bson:"use_user_timezone" json:"use_user_timezone"`
 	RRule            string `bson:"rrule" json:"rrule"`
+	HoursOfPeriod	 int	`bson:"hours_of_period" json:"hours_of_period"`
+	DeliveryTime	 TTime	`bson:"delivery_time" json:"delivery_time"`
+	BeginDate		 *time.Time	`bson:"begin_date" json:"begin_date"`
+	EndDate			 *time.Time	`bson:"end_date" json:"end_date"`
 }
 
 // ----------------------------------------
@@ -105,6 +164,7 @@ type SMSCampaign struct {
 }
 
 type SMSLang struct {
+	Lang string `bson:"lang" json:"lang"`
 	Text string `bson:"text" json:"text"`
 }
 
@@ -120,6 +180,7 @@ type NotificationCampaign struct {
 }
 
 type NotificationLang struct {
+	Lang  string   `bson:"lang" json:"lang"`
 	Title string   `bson:"title" json:"title"`
 	Text  string   `bson:"text" json:"text"`
 	Media []string `bson:"media,omitempty" json:"media,omitempty"`
@@ -140,24 +201,24 @@ func (Mutation) CreateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args Cam
 		UpdateToken:    ksuid.New().String(),
 	}
 
-	if err := e.CampaignData.Validate(); err != nil {
+	if err := e.CampaignData.Validate(p, rbac); err != nil {
 		return e, err
 	}
 
 	e.UpdateComputedFields()
 	err := db.Create(p.Context, &e)
-	return e, err
+	return Campaign{}, err
 }
 
 // ---
 
 type CampaignEdit struct {
 	ID   string       `json:"id"`
-	Data CampaignData `json:"data"` // todo support inline
+	Data	CampaignData	`json:",inline"`
 }
 
 func (Mutation) UpdateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args CampaignEdit) (Campaign, error) {
-	if err := args.Data.Validate(); err != nil {
+	if err := args.Data.Validate(p, rbac); err != nil {
 		return Campaign{}, err
 	}
 
@@ -169,7 +230,7 @@ func (Mutation) UpdateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args Cam
 	})
 
 	if err != nil {
-		// todo log to sentry
+		utils.LogErrorToSentry(err)
 		return Campaign{}, errors.New(utils.MessageCampaignCannotFindError)
 	}
 
@@ -179,10 +240,10 @@ func (Mutation) UpdateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args Cam
 	current.CampaignData = args.Data
 	current.UpdatedAt = time.Now()
 
-	if err := current.CampaignData.Validate(); err != nil {
+	if err := current.CampaignData.Validate(p, rbac); err != nil {
 		return current, err
 	} else if oldFormat != current.CampaignType {
-		return current, errors.New("campaign_type cannot be changed") // TODO change to utils
+		return current, errors.New(utils.MessageCampaignCannotChangeTypeError)
 	}
 
 	current.UpdateComputedFields()
@@ -196,7 +257,7 @@ func (Mutation) UpdateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args Cam
 	}, current)
 
 	if err != nil {
-		// todo log to sentry
+		utils.LogErrorToSentry(err)
 		log15.Error("error updating campaign", "err", err)
 		return current, errors.New(utils.MessageDefaultError)
 	} else if m.MatchedCount == 0 {
@@ -213,10 +274,10 @@ func (Mutation) DeleteCampaign(p graphql.ResolveParams, rbac rbac.RBAC, filter g
 	})
 
 	if err != nil {
-		// TODO log to sentry
+		utils.LogErrorToSentry(err)
 		return false, errors.New(utils.MessageCampaignCannotDeleteError)
 	}
-
+	
 	return true, nil
 }
 
@@ -233,4 +294,29 @@ func countNotNil(a ...interface{}) int {
 	}
 
 	return count
+}
+
+func GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBAC, id string) ([]contacts.Contact, error) {
+	s := contacts.Segment{}
+	err := db.Find(p.Context, &s, map[string]string{
+		"_id": id,
+		"organization_id": rbac.OrganizationID,
+	})
+	if err != nil {
+		return []contacts.Contact{}, errors.New(utils.MessageSegmentCannotFindError)
+	}
+
+	bsonObj, err := utils.ConvertQueryToBSON(*s.Filters)
+	if err != nil {
+		return []contacts.Contact{}, err
+	}
+
+	c := contacts.Contact{}
+	contacts_by_segment := []contacts.Contact{}
+	err = db.FindAll(p.Context, &c, &contacts_by_segment, bsonObj)
+	if err != nil {
+		return []contacts.Contact{}, errors.New(utils.MessageDefaultError)
+	}
+	
+	return contacts_by_segment, err
 }
