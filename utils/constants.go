@@ -42,8 +42,10 @@ const (
 	MessageCampaignNoLangProvidedError	string = "At least 1 language must be provided."
 	MessageCampaignRecipientExceedLimitError	string = "Exceeded maximum limit of recipients. Maximum allowed: 50"
 	MessageCampaignRecipientNotProvidedError	string = "Recipients must not be empty."
-	MessageCampaignInvalidRecipientError	string = "The recipients contain an invalid contact."
+	MessageCampaignInvalidRecipientError	string = "The recipients contain an invalid one."
 	MessageCampaignInvalidScheduleError		string = "The campaign schedule is not valid."
+	MessageCampaignInvalidLangError			string = "The language is not valid."
+	MessageCampaignDuplicateLangError			string = "Each language must be present only once"
 	 
 	MessageNoUpdateError string = "There is no data to update."
 	MessageDefaultError  string = "Internal error occured."

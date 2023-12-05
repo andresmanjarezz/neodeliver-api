@@ -17,7 +17,7 @@ import (
 )
 
 type Campaign struct {
-	ID             string     `bson:"_id" json:"id"`
+	ID             string     `bson:"_id,omitempty" json:"id"`
 	OrganizationID string     `bson:"organization_id" json:"organization_id"`
 	Draft          bool       `bson:"draft" json:"draft"`
 	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
@@ -84,12 +84,48 @@ func (c *CampaignData) Validate(p graphql.ResolveParams, rbac rbac.RBAC) error {
 		return errors.New(utils.MessageCampaignMustBeOneTypeError)
 	}
 
+	// validate lang exists and each lang to be present only once
+	flags := make(map[string]bool, 0)
+	if c.Email != nil {
+		for _, lang := range c.Email.Languages {
+			if !utils.ValidateLanguageCode(&lang.Lang) {
+				return errors.New(utils.MessageCampaignInvalidLangError)
+			}
+			if flags[lang.Lang] {
+				return errors.New(utils.MessageCampaignDuplicateLangError)
+			}
+			flags[lang.Lang] = true
+		}
+	}
+	if c.SMS != nil {
+		for _, lang := range c.SMS.Languages {
+			if !utils.ValidateLanguageCode(&lang.Lang) {
+				return errors.New(utils.MessageCampaignInvalidLangError)
+			}
+			if flags[lang.Lang] {
+				return errors.New(utils.MessageCampaignDuplicateLangError)
+			}
+			flags[lang.Lang] = true
+		}
+	}
+	if c.Notification != nil {
+		for _, lang := range c.Notification.Languages {
+			if !utils.ValidateLanguageCode(&lang.Lang) {
+				return errors.New(utils.MessageCampaignInvalidLangError)
+			}
+			if flags[lang.Lang] {
+				return errors.New(utils.MessageCampaignDuplicateLangError)
+			}
+			flags[lang.Lang] = true
+		}
+	}
+
 	if !(c.Email != nil && len(c.Email.Languages) != 0 || c.SMS != nil && len(c.SMS.Languages) != 0 || c.Notification != nil && len(c.Notification.Languages) != 0) {
 		return errors.New(utils.MessageCampaignNoLangProvidedError)
 	}
 
 	// check number of recipients
-	if len(c.Recipients) >= 50 {
+	if len(c.Recipients) >= utils.CampaignMaxinumRecipientNumber {
 		return errors.New(utils.MessageCampaignRecipientExceedLimitError)
 	}
 
@@ -110,7 +146,12 @@ func (c *CampaignData) Validate(p graphql.ResolveParams, rbac rbac.RBAC) error {
 				return errors.New(utils.MessageCampaignInvalidRecipientError)
 			}
 		} else if strings.HasPrefix(recipient, "tag_") {
-
+			err := db.Find(p.Context, &contacts.Tag{}, map[string]string{
+				"_id": recipient,
+			})
+			if err != nil {
+				return errors.New(utils.MessageCampaignInvalidRecipientError)
+			}
 		} else {
 			return errors.New(utils.MessageCampaignInvalidRecipientError)
 		}
@@ -207,7 +248,7 @@ func (Mutation) CreateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args Cam
 
 	e.UpdateComputedFields()
 	err := db.Create(p.Context, &e)
-	return Campaign{}, err
+	return e, err
 }
 
 // ---
