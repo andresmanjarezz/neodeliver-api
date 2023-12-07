@@ -4,7 +4,8 @@ const (
 	ContactStatusActive   string = "ACTIVE"
 	ContactStatusInactive string = "INACTIVE"
 	
-	CampaignMaxinumRecipientNumber	int = 50
+	CampaignMaximumRecipientNumber	int = 50
+	SegmentMaximumQueryBSONDepthNumber	int = 4
 )
 
 const (

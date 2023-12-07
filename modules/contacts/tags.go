@@ -53,7 +53,7 @@ func (Mutation) CreateTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagData)
 		return t, errors.New(utils.MessageTagNameDuplicationError)
 	}
 
-	_, err := db.Save(p.Context, &t)
+	_, err = db.Save(p.Context, &t)
 	if err != nil {
 		utils.LogErrorToSentry(err)
 		return t, errors.New(utils.MessageDefaultError)

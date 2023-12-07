@@ -125,7 +125,7 @@ func (c *CampaignData) Validate(p graphql.ResolveParams, rbac rbac.RBAC) error {
 	}
 
 	// check number of recipients
-	if len(c.Recipients) >= utils.CampaignMaxinumRecipientNumber {
+	if len(c.Recipients) >= utils.CampaignMaximumRecipientNumber {
 		return errors.New(utils.MessageCampaignRecipientExceedLimitError)
 	}
 

@@ -15,11 +15,15 @@ import (
 type Segment struct {
 	ID             string `bson:"_id,omitempty" json:"id"`
 	OrganizationID string    `bson:"organization_id"`
+	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
+	SegmentData			`bson:",inline" json:",inline"`
+	SegmentStats		`bson:",inline" json:",inline"`
+}
+
+type SegmentStats struct {
 	OpensCount	   int    `bson:"opens_count" json:"opens_count"`
 	ClickRate	   int	  `bson:"click_rate" json:"click_rate"`
 	MailsSentCount int	  `bson:"mails_sent_count" json:"mail_sent_count"`
-	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
-	SegmentData			`bson:",inline" json:",inline"`
 }
 
 type SegmentData struct {
@@ -44,9 +48,11 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 	s := Segment{
 		ID:				"sgt_" + ksuid.New().String(),
 		OrganizationID:	rbac.OrganizationID,
-		OpensCount:		0,
-		ClickRate:		0,
-		MailsSentCount:	0,
+		SegmentStats:	SegmentStats{
+			OpensCount:		0,
+			ClickRate:		0,
+			MailsSentCount:	0,
+		},
 		CreatedAt:		time.Now(),
 		SegmentData:	args,
 	}
@@ -72,7 +78,7 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 		return s, err
 	}
 
-	if utils.GetQueryBSONDepth(bsonObj) > 4 {
+	if utils.GetQueryBSONDepth(bsonObj) > utils.SegmentMaximumQueryBSONDepthNumber {
 		return s, errors.New(utils.MessageSegmentQueryDepthExceedError)
 	}
 

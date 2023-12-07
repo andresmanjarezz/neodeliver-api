@@ -14,15 +14,15 @@ import (
 
 type TransactionalMessage struct {
 	ID            	string `json:"id" bson:"_id"`
+	Name			string `json:"name" bson:"name"`
 	Draft          	bool   `json:"draft" bson:"draft"`
 	CreatedAt      	time.Time `json:"created_at"`
-	TransactionalMessageData	`json:",inline" bson:",inline"`
+	Status			string `json:"status" bson:"status"`
+	TransactionalMessageStats	`json:",inline" bson:",inline"`
 }
 
-type TransactionalMessageData struct {
-	Name			string `json:"name" bson:"name"`
-	Status			string `json:"status" bson:"status"`
-	Recipients		int	`json:"recipients" bson:"recipients"`
+type TransactionalMessageStats struct {
+	RecipientNumber	int	`json:"recipients" bson:"recipients"`
 	Opens			int	`json:"opens" bson:"opens"`
 	Clicks			int	`json:"clicks" bson:"clicks"`
 	Unsubs			int	`json:"unsubs" bson:"unsubs"`
@@ -36,27 +36,35 @@ type TransactionalMessageFolder struct {
 	TransactionalMessages	[]string	`json:"transactional_messages" bson:"transactional_messages"`
 }
 
-type TransactionalMessageInput	struct {
+type TransactionalMessageInput struct {
 	Name		string	`json:"name"`
 	FolderID	string	`json:"folder_id"`
 }
 
+type TransactionalMessageData struct {
+	Name			string `json:"name" bson:"name"`
+	Draft          	bool   `json:"draft" bson:"draft"`
+	CreatedAt      	time.Time `json:"created_at"`
+	Status			string `json:"status" bson:"status"`
+	TransactionalMessageStats	`json:",inline" bson:",inline"`
+}
+
 type TransactionalObjectID struct {
-	ID			string `json:"id"`
+	ID		string `json:"id"`
 }
 
 type TransactionalMessageFolderData struct {
-	Name		string	`json:"name"`
+	Name	string	`json:"name"`
 }
 
 type TransactionalMessageFolderEdit struct {
-	ID			string	`json:"id"`
-	Data		TransactionalMessageFolderData	`json:"data"`
+	ID		string	`json:"id"`
+	Data	TransactionalMessageFolderData	`json:"data"`
 }
 
 type TransactionalMessageEdit struct {
-	ID			string	`json:"id"`
-	Data		TransactionalMessageData	`json:"data"`
+	ID		string	`json:"id"`
+	Data	TransactionalMessageData	`json:"data"`
 }
 
 func (Mutation) CreateTransactionalMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderData) (TransactionalMessageFolder, error) {
@@ -76,13 +84,13 @@ func (Mutation) CreateTransactionalMessageFolder(p graphql.ResolveParams, rbac r
 func (Mutation) CreateTransactionalMessage(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageInput) (TransactionalMessage, error) {
 	m := TransactionalMessage{
 		ID:				"tmsg_" + ksuid.New().String(),
-		TransactionalMessageData:	TransactionalMessageData{
-			Name:			args.Name,
-			Status:			"",
-			Recipients:		0,
-			Opens:			0,
-			Clicks:			0,
-			Unsubs:			0,
+		Name:			args.Name,
+		Status:			"",
+		TransactionalMessageStats:	TransactionalMessageStats{
+			RecipientNumber: 0,
+			Opens:			 0,
+			Clicks:			 0,
+			Unsubs:			 0,
 		},
 	}
 	f := TransactionalMessageFolder{}
