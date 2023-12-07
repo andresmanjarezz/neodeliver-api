@@ -60,6 +60,7 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 		"name": *args.Name,
 	})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return s, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
@@ -77,6 +78,7 @@ func (Mutation) CreateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 
 	_, err = db.Save(p.Context, &s)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return s, errors.New(utils.MessageDefaultError)
 	}
 
@@ -104,6 +106,7 @@ func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 		"_id": args.ID,
 	}, data)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return s, errors.New(utils.MessageDefaultError)
 	}
 
@@ -114,6 +117,7 @@ func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter Se
 	s := Segment{}
 	err := db.Delete(p.Context, &s, map[string]string{"_id": filter.ID})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return false, errors.New(utils.MessageSegmentCannotDeleteError)
 	}
 	return true, nil
@@ -123,7 +127,6 @@ func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBA
 	s := Segment{}
 	err := db.Find(p.Context, &s, map[string]string{
 		"_id": args.ID,
-		"organization_id": rbac.OrganizationID,
 	})
 	if err != nil {
 		return []Contact{}, errors.New(utils.MessageSegmentCannotFindError)

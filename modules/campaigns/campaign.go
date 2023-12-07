@@ -23,7 +23,7 @@ type Campaign struct {
 	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
 	UpdatedAt      time.Time  `bson:"updated_at" json:"updated_at"`
 	UpdateToken    string     `bson:"update_token" json:"update_token"`
-	NextSchedule   *time.Time `bson:"next_schedule" json:"next_schedule"` // updated by scheduler to perform fast searches on next scheduled campaigns
+	NextSchedule   *time.Time `bson:"next_schedule" json:"next_schedule"`
 	CampaignType   string     `bson:"campaign_type" json:"campaign_type"`
 	CampaignData   `bson:",inline" json:",inline"`
 	CampaignStats  CampaignStats	`bson:"campaign_stats" json:"campaign_stats"`
@@ -130,30 +130,29 @@ func (c *CampaignData) Validate(p graphql.ResolveParams, rbac rbac.RBAC) error {
 	}
 
 	// convert segments into contacts 
-	for _, recipient := range c.Recipients {
-		if strings.HasPrefix(recipient, "ctc_") {
-			err := db.Find(p.Context, &contacts.Contact{}, map[string]string{
-				"_id": recipient,
-			})
-			if err != nil {
+	validateRecipient := func(recipient string) error {
+		switch {
+		case strings.HasPrefix(recipient, "ctc_"):
+			if err := db.Find(p.Context, &contacts.Contact{}, map[string]string{"_id": recipient}); err != nil {
 				return errors.New(utils.MessageCampaignInvalidRecipientError)
 			}
-		} else if strings.HasPrefix(recipient, "sgt_") {
-			err := db.Find(p.Context, &contacts.Segment{}, map[string]string{
-				"_id": recipient,
-			})
-			if err != nil {
+		case strings.HasPrefix(recipient, "sgt_"):
+			if err := db.Find(p.Context, &contacts.Segment{}, map[string]string{"_id": recipient}); err != nil {
 				return errors.New(utils.MessageCampaignInvalidRecipientError)
 			}
-		} else if strings.HasPrefix(recipient, "tag_") {
-			err := db.Find(p.Context, &contacts.Tag{}, map[string]string{
-				"_id": recipient,
-			})
-			if err != nil {
+		case strings.HasPrefix(recipient, "tag_"):
+			if err := db.Find(p.Context, &contacts.Tag{}, map[string]string{"_id": recipient}); err != nil {
 				return errors.New(utils.MessageCampaignInvalidRecipientError)
 			}
-		} else {
+		default:
 			return errors.New(utils.MessageCampaignInvalidRecipientError)
+		}
+		return nil
+	}
+
+	for _, recipient := range c.Recipients {
+		if err := validateRecipient(recipient); err != nil {
+			return err
 		}
 	}
 	
@@ -302,9 +301,9 @@ func (Mutation) UpdateCampaign(p graphql.ResolveParams, rbac rbac.RBAC, args Cam
 		log15.Error("error updating campaign", "err", err)
 		return current, errors.New(utils.MessageDefaultError)
 	} else if m.MatchedCount == 0 {
-		return current, errors.New("campaign changed during update, please try again")
+		return current, errors.New(utils.MessageCampaignCannotFindError)
 	}
-
+	
 	return current, nil
 }
 
@@ -335,29 +334,4 @@ func countNotNil(a ...interface{}) int {
 	}
 
 	return count
-}
-
-func GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBAC, id string) ([]contacts.Contact, error) {
-	s := contacts.Segment{}
-	err := db.Find(p.Context, &s, map[string]string{
-		"_id": id,
-		"organization_id": rbac.OrganizationID,
-	})
-	if err != nil {
-		return []contacts.Contact{}, errors.New(utils.MessageSegmentCannotFindError)
-	}
-
-	bsonObj, err := utils.ConvertQueryToBSON(*s.Filters)
-	if err != nil {
-		return []contacts.Contact{}, err
-	}
-
-	c := contacts.Contact{}
-	contacts_by_segment := []contacts.Contact{}
-	err = db.FindAll(p.Context, &c, &contacts_by_segment, bsonObj)
-	if err != nil {
-		return []contacts.Contact{}, errors.New(utils.MessageDefaultError)
-	}
-	
-	return contacts_by_segment, err
 }

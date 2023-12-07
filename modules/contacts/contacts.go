@@ -3,6 +3,9 @@ package contacts
 import (
 	"errors"
 	"time"
+	"encoding/base64"
+	"encoding/csv"
+	"strings"
 
 	"github.com/graphql-go/graphql"
 	"github.com/segmentio/ksuid"
@@ -90,7 +93,7 @@ type TagAssign struct {
 	TagID		string
 }
 
-func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactData) (Contact, error) {
+func (Mutation) CreateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactData) (Contact, error) {
 	c := Contact{
 		ID:             "ctc_" + ksuid.New().String(),
 		OrganizationID: rbac.OrganizationID,
@@ -114,6 +117,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 
 	numberOfDuplicates, err := db.Count(p.Context, &c, filter)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
@@ -122,6 +126,7 @@ func (Mutation) AddContact(p graphql.ResolveParams, rbac rbac.RBAC, args Contact
 
 	_, err = db.Save(p.Context, &c)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageDefaultError)
 	}
 
@@ -169,6 +174,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	}
 	numberOfDuplicates, err := db.Count(p.Context, &c, duplicateFilter)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageDefaultError)
 	}
 	if numberOfDuplicates >= 1 {
@@ -179,6 +185,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 		"_id": args.ID,
 	}, data)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageDefaultError)
 	}
 
@@ -189,6 +196,7 @@ func (Mutation) DeleteContact(p graphql.ResolveParams, rbac rbac.RBAC, filter Co
 	c := Contact{}
 	err := db.Delete(p.Context, &c, map[string]string{"_id": filter.ID})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return false, errors.New(utils.MessageContactCannotDeleteError)
 	}
 	return true, nil
@@ -200,6 +208,7 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		"_id": args.ContactID,
 	})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageContactCannotFindError)
 	}
 
@@ -208,6 +217,7 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		"_id": args.TagID,
 	})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageTagCannotFindError)
 	}
 
@@ -226,10 +236,73 @@ func (Mutation) AssignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssig
 		"_id": args.ContactID,
 	}, c)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageTagCannotAssignError)
 	}
 
 	return c, err
+}
+
+type ContactCSVFile struct {
+	Base64Content		string	`json:"base64_content"`
+}
+
+func (Mutation) CreateContactsFromCSV(p graphql.ResolveParams, rbac rbac.RBAC, args ContactCSVFile) ([]Contact, error) {
+	decodedData, err := base64.StdEncoding.DecodeString(args.Base64Content)
+	if err != nil {
+		return make([]Contact, 0), errors.New(utils.MessageDefaultError)
+	}
+	
+	reader := csv.NewReader(strings.NewReader(string(decodedData)))
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		return make([]Contact, 0), errors.New(utils.MessageDefaultError)
+	}
+
+	contacts := make([]Contact, len(records) - 1)
+	for i, record := range records[1:] {
+		contacts[i] = Contact{
+			ID:             "ctc_" + ksuid.New().String(),
+			OrganizationID: rbac.OrganizationID,
+			Status:         utils.ContactStatusActive,
+			SubscribedAt:   time.Now(),
+			ContactData:    ContactData{
+				GivenName:		&record[0],
+				LastName:		&record[1],
+				Email:			&record[2],
+				ExternalID:		&record[3],
+				PhoneNumber:	&record[4],
+				Lang:			&record[5],
+			},
+			Tags:		 	make([]string, 0),
+		}
+		if err := contacts[i].ContactData.Validate(); err != nil {
+			continue
+		}
+
+		filter := bson.M{
+			"organization_id": rbac.OrganizationID,
+			"$or": []bson.M{
+				{"email": *contacts[i].ContactData.Email},
+				{"external_id": *contacts[i].ContactData.ExternalID},
+			},
+		}
+	
+		numberOfDuplicates, err := db.Count(p.Context, &contacts[i], filter)
+		if err != nil {
+			continue
+		}
+		if numberOfDuplicates >= 1 {
+			continue
+		}
+	
+		_, err = db.Save(p.Context, &contacts[i])
+		if err != nil {
+			continue
+		}
+	}
+	return contacts, nil
 }
 
 func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
@@ -238,6 +311,7 @@ func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAss
 		"_id": args.ContactID,
 	})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageContactCannotFindError)
 	}
 
@@ -246,6 +320,7 @@ func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAss
 		"_id": args.TagID,
 	})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageTagCannotFindError)
 	}
 
@@ -264,6 +339,7 @@ func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAss
 		"_id": args.ContactID,
 	}, c)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return c, errors.New(utils.MessageTagCannotAssignError)
 	}
 

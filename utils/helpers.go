@@ -18,7 +18,7 @@ func ValidateEmail(email *string) bool {
 }
 
 func ValidatePhone(phone *string) bool {
-	phoneRegex := `^\+\d{1,3}-\d{1,3}-\d{1,3}-\d{1,10}$`
+	phoneRegex := `^\+[1-3]\d{0,2} \d{10}$`
 	match, _ := regexp.MatchString(phoneRegex, *phone)
 	return match
 }

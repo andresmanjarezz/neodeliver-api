@@ -35,7 +35,7 @@ type TagID struct {
 	ID             string `bson:"_id, omitempty"`
 }
 
-func (Mutation) AddTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagData) (Tag, error) {
+func (Mutation) CreateTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagData) (Tag, error) {
 	t := Tag{
 		ID:				"tag_" + ksuid.New().String(),
 		OrganizationID:	rbac.OrganizationID,
@@ -44,13 +44,18 @@ func (Mutation) AddTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagData) (T
 		TagData:		args,
 	}
 
-	numberOfDuplicates, _ := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Name})
+	numberOfDuplicates, err := db.Count(p.Context, &t, map[string]string{"organization_id": t.OrganizationID, "name": *args.Name})
+	if err != nil {
+		utils.LogErrorToSentry(err)
+		return t, errors.New(utils.MessageDefaultError)
+	}
 	if numberOfDuplicates >= 1 {
 		return t, errors.New(utils.MessageTagNameDuplicationError)
 	}
 
 	_, err := db.Save(p.Context, &t)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return t, errors.New(utils.MessageDefaultError)
 
 	}
@@ -82,6 +87,7 @@ func (Mutation) UpdateTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagEdit)
 	if args.Data.Name != nil {
 		sameNameCount, err := db.Count(p.Context, &t, filter)
 		if err != nil {
+			utils.LogErrorToSentry(err)
 			return t, errors.New(utils.MessageDefaultError)
 		}
 		if sameNameCount >= 1 {
@@ -93,6 +99,7 @@ func (Mutation) UpdateTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagEdit)
 		"_id": args.ID,
 	}, data)
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return t, errors.New(utils.MessageDefaultError)
 	}
 
@@ -103,6 +110,7 @@ func (Mutation) DeleteTag(p graphql.ResolveParams, rbac rbac.RBAC, filter TagID)
 	t := Tag{}
 	err := db.Delete(p.Context, &t, map[string]string{"_id": filter.ID})
 	if err != nil {
+		utils.LogErrorToSentry(err)
 		return false, errors.New(utils.MessageTagCannotDeleteError)
 	}
 	return true, nil
