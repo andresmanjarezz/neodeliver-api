@@ -22,10 +22,10 @@ type TransactionalMessage struct {
 }
 
 type TransactionalMessageStats struct {
-	RecipientNumber	int	`json:"recipients" bson:"recipients"`
-	Opens			int	`json:"opens" bson:"opens"`
-	Clicks			int	`json:"clicks" bson:"clicks"`
-	Unsubs			int	`json:"unsubs" bson:"unsubs"`
+	Recipients		int	`json:"recipients,omitempty" bson:"recipients"`
+	Opens			int	`json:"opens,omitempty" bson:"opens"`
+	Clicks			int	`json:"clicks,omitempty" bson:"clicks"`
+	Unsubs			int	`json:"unsubs,omitempty" bson:"unsubs"`
 }
 
 type TransactionalMessageFolder struct {
@@ -43,8 +43,6 @@ type TransactionalMessageInput struct {
 
 type TransactionalMessageData struct {
 	Name			string `json:"name" bson:"name"`
-	Draft          	bool   `json:"draft" bson:"draft"`
-	CreatedAt      	time.Time `json:"created_at"`
 	Status			string `json:"status" bson:"status"`
 	TransactionalMessageStats	`json:",inline" bson:",inline"`
 }
@@ -85,9 +83,9 @@ func (Mutation) CreateTransactionalMessage(p graphql.ResolveParams, rbac rbac.RB
 	m := TransactionalMessage{
 		ID:				"tmsg_" + ksuid.New().String(),
 		Name:			args.Name,
-		Status:			"",
+		Status:			"Pending",
 		TransactionalMessageStats:	TransactionalMessageStats{
-			RecipientNumber: 0,
+			Recipients: 	 0,
 			Opens:			 0,
 			Clicks:			 0,
 			Unsubs:			 0,
@@ -140,7 +138,7 @@ func (Mutation) DeleteTransactionalMessage(p graphql.ResolveParams, rbac rbac.RB
 	return true, nil
 }
 
-func (Mutation) UpdateTransactionMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderEdit) (TransactionalMessageFolder, error) {
+func (Mutation) UpdateTransactionalMessageFolder(p graphql.ResolveParams, rbac rbac.RBAC, args TransactionalMessageFolderEdit) (TransactionalMessageFolder, error) {
 	f := TransactionalMessageFolder{}
 
 	data := ggraphql.ArgToBson(p.Args["data"], args.Data)

@@ -77,6 +77,7 @@ type Contact struct {
 	SubscribedAt   time.Time `bson:"subscribed_at" json:"subscribed_at"`
 	ContactData    `bson:",inline" json:",inline"`
 	Tags	   	   []string	 `bson:"tags"`
+	ContactStats   ContactStats	`bson:"contact_stats" json:"contact_stats"`
 }
 
 type ContactID struct {
@@ -94,6 +95,14 @@ type TagAssign struct {
 }
 
 func (Mutation) CreateContact(p graphql.ResolveParams, rbac rbac.RBAC, args ContactData) (Contact, error) {
+	contactStatsItem := ContactStatsItem{
+		CampaignsSent:		0,
+		LastCampaignSent:	time.Now(),
+		MessagesOpened:		0,
+		LastMessageOpened:	time.Now(),
+		MessagesClicked:	0,
+		LastMessageClicked:	time.Now(),
+	}
 	c := Contact{
 		ID:             "ctc_" + ksuid.New().String(),
 		OrganizationID: rbac.OrganizationID,
@@ -101,6 +110,11 @@ func (Mutation) CreateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 		SubscribedAt:   time.Now(),
 		ContactData:    args,
 		Tags:			make([]string, 0),
+		ContactStats:	ContactStats{
+			Email:			contactStatsItem,
+			SMS:			contactStatsItem,
+			Notifications:	contactStatsItem,
+		},
 	}
 
 	if err := c.Validate(); err != nil {
@@ -149,6 +163,7 @@ func (Mutation) UpdateContact(p graphql.ResolveParams, rbac rbac.RBAC, args Cont
 	filter := bson.M{}
 	if args.Data.Email != nil && args.Data.ExternalID != nil {
 		filter = bson.M{
+			"organization_id": rbac.OrganizationID,
 			"$or": []bson.M{
 				{"email": *args.Data.Email},
 				{"external_id": *args.Data.ExternalID},
@@ -260,7 +275,16 @@ func (Mutation) CreateContactsFromCSV(p graphql.ResolveParams, rbac rbac.RBAC, a
 		return make([]Contact, 0), errors.New(utils.MessageDefaultError)
 	}
 
+	contactStatsItem := ContactStatsItem{
+		CampaignsSent:		0,
+		LastCampaignSent:	time.Now(),
+		MessagesOpened:		0,
+		LastMessageOpened:	time.Now(),
+		MessagesClicked:	0,
+		LastMessageClicked:	time.Now(),
+	}
 	contacts := make([]Contact, len(records) - 1)
+	added_contacts := make([]Contact, 0)
 	for i, record := range records[1:] {
 		contacts[i] = Contact{
 			ID:             "ctc_" + ksuid.New().String(),
@@ -276,16 +300,20 @@ func (Mutation) CreateContactsFromCSV(p graphql.ResolveParams, rbac rbac.RBAC, a
 				Lang:			&record[5],
 			},
 			Tags:		 	make([]string, 0),
+			ContactStats:	ContactStats{
+				Email:			contactStatsItem,
+				SMS:			contactStatsItem,
+				Notifications:	contactStatsItem,
+			},
 		}
 		if err := contacts[i].ContactData.Validate(); err != nil {
 			continue
 		}
 
 		filter := bson.M{
-			"organization_id": rbac.OrganizationID,
 			"$or": []bson.M{
-				{"email": *contacts[i].ContactData.Email},
-				{"external_id": *contacts[i].ContactData.ExternalID},
+				{"email": contacts[i].ContactData.Email},
+				{"external_id": contacts[i].ContactData.ExternalID},
 			},
 		}
 	
@@ -301,8 +329,9 @@ func (Mutation) CreateContactsFromCSV(p graphql.ResolveParams, rbac rbac.RBAC, a
 		if err != nil {
 			continue
 		}
+		added_contacts = append(added_contacts, contacts[i])
 	}
-	return contacts, nil
+	return added_contacts, nil
 }
 
 func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAssign) (Contact, error) {
@@ -344,4 +373,20 @@ func (Mutation) UnassignTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagAss
 	}
 
 	return c, err
+}
+
+func (Mutation) GetContactsByTag(p graphql.ResolveParams, rbac rbac.RBAC, args TagID) ([]Contact, error) {
+	c := Contact{}
+	contacts := make([]Contact, 0)
+	filter := bson.M{
+        "tags": bson.M{
+            "$in": bson.A{args.ID},
+        },
+		"organization_id": rbac.OrganizationID,
+    }
+	err := db.FindAll(p.Context, &c, &contacts, filter)
+	if err != nil {
+		return []Contact{}, errors.New(utils.MessageDefaultError)
+	}
+	return contacts, err
 }
