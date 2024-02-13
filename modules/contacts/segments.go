@@ -97,17 +97,20 @@ type SegmentEdit struct {
 }
 
 func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentEdit) (Segment, error) {
+	// Validate the data before updating the segment
 	if err := args.Data.Validate(); err != nil {
 		return Segment{}, err
 	}
-	// only update the fields that were passed in params
+	
+	// Convert the data to BSON for updating only the specified fields
 	data := ggraphql.ArgToBson(p.Args["data"], args.Data)
 	if len(data) == 0 {
 		return Segment{}, errors.New(utils.MessageNoUpdateError)
 	}
-
+	
 	s := Segment{}
-
+	
+	// Update the segment in the database based on the provided ID and data
 	err := db.Update(p.Context, &s, map[string]string{
 		"_id": args.ID,
 	}, data)
@@ -115,12 +118,13 @@ func (Mutation) UpdateSegment(p graphql.ResolveParams, rbac rbac.RBAC, args Segm
 		utils.LogErrorToSentry(err)
 		return s, errors.New(utils.MessageDefaultError)
 	}
-
+	
 	return s, nil
 }
 
 func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter SegmentID) (bool, error) {
 	s := Segment{}
+	// Delete the segment from the database based on the provided filter ID
 	err := db.Delete(p.Context, &s, map[string]string{"_id": filter.ID})
 	if err != nil {
 		utils.LogErrorToSentry(err)
@@ -129,8 +133,10 @@ func (Mutation) DeleteSegment(p graphql.ResolveParams, rbac rbac.RBAC, filter Se
 	return true, nil
 }
 
+// GetContactsBySegmentQuery retrieves contacts based on a segment query
 func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBAC, args SegmentID) ([]Contact, error) {
 	s := Segment{}
+	// Find the segment by ID
 	err := db.Find(p.Context, &s, map[string]string{
 		"_id": args.ID,
 	})
@@ -138,6 +144,7 @@ func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBA
 		return []Contact{}, errors.New(utils.MessageSegmentCannotFindError)
 	}
 
+	// Convert the segment filters to BSON
 	bsonObj, err := utils.ConvertQueryToBSON(*s.Filters)
 	if err != nil {
 		return []Contact{}, err
@@ -145,10 +152,11 @@ func (Mutation) GetContactsBySegmentQuery(p graphql.ResolveParams, rbac rbac.RBA
 
 	c := Contact{}
 	contacts := []Contact{}
+	// Find all contacts matching the segment filters
 	err = db.FindAll(p.Context, &c, &contacts, bsonObj)
 	if err != nil {
 		return []Contact{}, errors.New(utils.MessageDefaultError)
 	}
-	
+
 	return contacts, err
 }
