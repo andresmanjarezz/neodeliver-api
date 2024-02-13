@@ -60,11 +60,11 @@ func (c *Campaign) UpdateComputedFields() {
 type CampaignData struct {
 	Name          string                `bson:"name" json:"name"`
 	Recipients    []string              `bson:"recipients" json:"recipients"`
-	Scheduler     *CampaignScheduler    `bson:"scheduled" json:"scheduled"`
+	Scheduler     *CampaignScheduler    `bson:"scheduler" json:"scheduler"`
 	Transactional bool                  `bson:"transactional" json:"transactional"`
-	Email         *Email                `bson:"email,omitempty" json:"email,omitempty"`
-	SMS           *SMSCampaign          `bson:"sms,omitempty" json:"sms,omitempty"`
-	Notification  *NotificationCampaign `bson:"notification,omitempty" json:"notification,omitempty"`
+	Email         *Email                `bson:"email,inline,omitempty" json:"email,inline,omitempty"`
+	SMS           *SMSCampaign          `bson:"sms,inline,omitempty" json:"sms,inline,omitempty"`
+	Notification  *NotificationCampaign `bson:"notification,inline,omitempty" json:"notification,inline,omitempty"`
 }
 
 type CampaignStats struct {
